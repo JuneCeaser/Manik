@@ -148,11 +148,7 @@ export default function LoginScreen() {
               <View style={styles.labelRow}>
                 <Text style={styles.label}>Password</Text>
 
-                <Pressable
-                  onPress={() => router.push('/forgot-password')}
-                >
-                  <Text style={styles.forgotText}>Forgot password?</Text>
-                </Pressable>
+              
               </View>
 
               <View style={styles.inputWrapper}>
@@ -186,6 +182,11 @@ export default function LoginScreen() {
                   />
                 </Pressable>
               </View>
+                <Pressable
+                  onPress={() => router.push('/forgot-password')}
+                >
+                  <Text style={styles.forgotText}>Forgot password?</Text>
+                </Pressable>
             </View>
 
             {/* Login button */}
@@ -366,6 +367,8 @@ const styles = StyleSheet.create({
     color: '#2563EB',
     fontSize: 12,
     fontWeight: '700',
+    marginTop: 6,
+    marginLeft: 'auto',
   },
   inputWrapper: {
     height: 54,
