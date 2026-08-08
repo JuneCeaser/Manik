@@ -14,6 +14,7 @@ const {
   verifyChangeNameOtp,
   sendDeleteAccountOtp,
   verifyDeleteAccountOtp,
+  uploadProfileImage,
 } = require('../controllers/authController');
 
 // Public routes
@@ -33,5 +34,8 @@ router.post('/change-name/verify-otp', protect, verifyChangeNameOtp);
 
 router.post('/delete-account/send-otp', protect, otpRateLimiter, sendDeleteAccountOtp);
 router.post('/delete-account/verify-otp', protect, verifyDeleteAccountOtp);
+
+// Profile Image Route
+router.put('/profile-image', protect, uploadProfileImage);
 
 module.exports = router;

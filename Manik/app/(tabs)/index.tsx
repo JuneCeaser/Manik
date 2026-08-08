@@ -9,9 +9,10 @@ import {
   Text,
   TextInput,
   View,
+  Image,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../constants/api';
 
@@ -23,6 +24,7 @@ export default function HomeScreen() {
   const [activeModal, setActiveModal] = useState<ActiveModal>('NONE');
   const [step, setStep] = useState<'INPUT' | 'OTP'>('INPUT');
   const [loading, setLoading] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
 
   // Form States
   const [newName, setNewName] = useState('');
@@ -40,6 +42,56 @@ export default function HomeScreen() {
   };
 
   // --------------------------------------------------------------------------
+  // UPLOAD IMAGE FLOW
+  // --------------------------------------------------------------------------
+  const pickImage = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (permissionResult.granted === false) {
+      Alert.alert('Permission Required', 'You need to allow access to your photos to upload a profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0].base64) {
+      handleUploadImage(result.assets[0].base64);
+    }
+  };
+
+  const handleUploadImage = async (base64String: string) => {
+    setImageUploading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/profile-image`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${userToken}`,
+        },
+        body: JSON.stringify({ base64Image: base64String }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        await loginState(userToken!, data.user);
+      } else {
+        Alert.alert('Upload Failed', data.message);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to connect to the server.');
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  // --------------------------------------------------------------------------
   // CHANGE NAME FLOW
   // --------------------------------------------------------------------------
   const handleSendNameOtp = async () => {
@@ -48,10 +100,7 @@ export default function HomeScreen() {
     try {
       const res = await fetch(`${API_BASE_URL}/change-name/send-otp`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${userToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
         body: JSON.stringify({ newName }),
       });
       const data = await res.json();
@@ -70,10 +119,7 @@ export default function HomeScreen() {
     try {
       const res = await fetch(`${API_BASE_URL}/change-name/verify-otp`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${userToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
         body: JSON.stringify({ code: otpCode }),
       });
       const data = await res.json();
@@ -93,17 +139,12 @@ export default function HomeScreen() {
   // CHANGE PASSWORD FLOW
   // --------------------------------------------------------------------------
   const handleSendPasswordOtp = async () => {
-    if (!newPassword || newPassword.length < 6) {
-      return Alert.alert('Error', 'New password must be at least 6 characters.');
-    }
+    if (!newPassword || newPassword.length < 6) return Alert.alert('Error', 'New password must be at least 6 characters.');
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/change-password/send-otp`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${userToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
       });
       const data = await res.json();
       if (data.success) setStep('OTP');
@@ -121,10 +162,7 @@ export default function HomeScreen() {
     try {
       const res = await fetch(`${API_BASE_URL}/change-password/verify-otp`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${userToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
         body: JSON.stringify({ code: otpCode, newPassword }),
       });
       const data = await res.json();
@@ -148,10 +186,7 @@ export default function HomeScreen() {
     try {
       const res = await fetch(`${API_BASE_URL}/delete-account/send-otp`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${userToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
         body: JSON.stringify({ password: currentPassword }),
       });
       const data = await res.json();
@@ -170,10 +205,7 @@ export default function HomeScreen() {
     try {
       const res = await fetch(`${API_BASE_URL}/delete-account/verify-otp`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${userToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
         body: JSON.stringify({ code: otpCode }),
       });
       const data = await res.json();
@@ -191,12 +223,30 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <Text style={styles.headerTitle}>GemMarket Dashboard</Text>
+      <Text style={styles.headerTitle}>Manik Dashboard</Text>
 
       {/* Profile Card */}
       {user && (
         <View style={styles.card}>
-          <Ionicons name="person-circle" size={60} color="#2563EB" style={{ alignSelf: 'center' }} />
+          {/* Avatar Section */}
+          <View style={styles.avatarContainer}>
+            <Pressable onPress={pickImage} disabled={imageUploading}>
+              {user.profileImage ? (
+                <Image source={{ uri: user.profileImage }} style={styles.avatarImage} />
+              ) : (
+                <Ionicons name="person-circle" size={80} color="#2563EB" />
+              )}
+              
+              <View style={styles.editBadge}>
+                {imageUploading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="camera" size={12} color="#FFFFFF" />
+                )}
+              </View>
+            </Pressable>
+          </View>
+
           <Text style={styles.userName}>{user.name}</Text>
           <Text style={styles.userPhone}>+{user.phone}</Text>
 
@@ -221,7 +271,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Logout Button */}
       <Pressable onPress={logout} style={styles.logoutButton}>
         <Text style={styles.logoutText}>Log Out</Text>
       </Pressable>
@@ -231,7 +280,6 @@ export default function HomeScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             
-            {/* Modal Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {activeModal === 'CHANGE_NAME' && 'Change Name'}
@@ -254,7 +302,11 @@ export default function HomeScreen() {
                 </>
               ) : (
                 <>
-                  <TextInput style={styles.input} placeholder="6-Digit OTP" keyboardType="number-pad" maxLength={6} value={otpCode} onChangeText={setOtpCode} />
+                  <TextInput 
+                    style={styles.input} placeholder="6-Digit OTP" keyboardType="number-pad" 
+                    maxLength={6} value={otpCode} onChangeText={setOtpCode}
+                    textContentType="oneTimeCode" autoComplete="sms-otp" importantForAutofill="yes"
+                  />
                   <Pressable style={styles.modalButton} onPress={handleVerifyNameOtp} disabled={loading}>
                     {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Verify & Update</Text>}
                   </Pressable>
@@ -273,7 +325,11 @@ export default function HomeScreen() {
                 </>
               ) : (
                 <>
-                  <TextInput style={styles.input} placeholder="6-Digit OTP" keyboardType="number-pad" maxLength={6} value={otpCode} onChangeText={setOtpCode} />
+                  <TextInput 
+                    style={styles.input} placeholder="6-Digit OTP" keyboardType="number-pad" 
+                    maxLength={6} value={otpCode} onChangeText={setOtpCode}
+                    textContentType="oneTimeCode" autoComplete="sms-otp" importantForAutofill="yes"
+                  />
                   <Pressable style={styles.modalButton} onPress={handleVerifyPasswordOtp} disabled={loading}>
                     {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Verify & Change</Text>}
                   </Pressable>
@@ -294,18 +350,20 @@ export default function HomeScreen() {
               ) : (
                 <>
                   <Text style={{ color: '#EF4444', marginBottom: 12 }}>Warning: This action is permanent.</Text>
-                  <TextInput style={styles.input} placeholder="6-Digit OTP" keyboardType="number-pad" maxLength={6} value={otpCode} onChangeText={setOtpCode} />
+                  <TextInput 
+                    style={styles.input} placeholder="6-Digit OTP" keyboardType="number-pad" 
+                    maxLength={6} value={otpCode} onChangeText={setOtpCode}
+                    textContentType="oneTimeCode" autoComplete="sms-otp" importantForAutofill="yes"
+                  />
                   <Pressable style={[styles.modalButton, { backgroundColor: '#EF4444' }]} onPress={handleVerifyDeleteOtp} disabled={loading}>
                     {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Verify & Delete Account</Text>}
                   </Pressable>
                 </>
               )
             )}
-
           </View>
         </View>
       </Modal>
-
     </ScrollView>
   );
 }
@@ -315,6 +373,12 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 22, paddingTop: 60 },
   headerTitle: { fontSize: 26, fontWeight: '800', color: '#0F172A', marginBottom: 20 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, elevation: 3, marginBottom: 20 },
+  
+  // Avatar Styles
+  avatarContainer: { alignSelf: 'center', position: 'relative', marginBottom: 10 },
+  avatarImage: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E2E8F0' },
+  editBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#0F172A', width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
+  
   userName: { fontSize: 20, fontWeight: '700', color: '#0F172A', textAlign: 'center', marginTop: 8 },
   userPhone: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 20 },
   actionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },

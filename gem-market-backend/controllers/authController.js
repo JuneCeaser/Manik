@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const cloudinary = require('cloudinary').v2;
 const User = require('../models/User');
 const Otp = require('../models/Otp');
 const generateOtp = require('../utils/generateOtp');
@@ -9,6 +10,13 @@ const OTP_EXPIRY_MS = (Number(process.env.OTP_EXPIRY_MINUTES) || 5) * 60 * 1000;
 const MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS) || 5;
 
 const isValidPhone = (phone) => /^\d{9,12}$/.test(phone);
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 // --------------------------------------------------------------------------
 // REGISTER
@@ -38,7 +46,7 @@ exports.sendRegisterOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    await sendSms(phone, `Your GemMarket verification code is ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
+    await sendSms(phone, `Your Manik verification code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
 
     return res.json({ success: true, message: 'OTP sent successfully.' });
   } catch (err) {
@@ -90,7 +98,7 @@ exports.verifyRegisterOtp = async (req, res) => {
     return res.json({
       success: true,
       token,
-      user: { id: user._id, phone: user.phone, name: user.name },
+      user: { id: user._id, phone: user.phone, name: user.name, profileImage: user.profileImage },
     });
   } catch (err) {
     console.error('verifyRegisterOtp error:', err);
@@ -122,7 +130,7 @@ exports.login = async (req, res) => {
     return res.json({
       success: true,
       token,
-      user: { id: user._id, phone: user.phone, name: user.name },
+      user: { id: user._id, phone: user.phone, name: user.name, profileImage: user.profileImage },
     });
   } catch (err) {
     console.error('login error:', err);
@@ -154,7 +162,7 @@ exports.sendForgotPasswordOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    await sendSms(phone, `Your GemMarket password reset code is ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
+    await sendSms(phone, `Your Manik password reset code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
 
     return res.json({ success: true, message: 'Password reset OTP sent.' });
   } catch (err) {
@@ -221,7 +229,7 @@ exports.sendChangePasswordOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    await sendSms(phone, `Your GemMarket verification code to change password is ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
+    await sendSms(phone, `Your Manik verification code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
 
     return res.json({ success: true, message: 'OTP sent to your registered phone number.' });
   } catch (err) {
@@ -287,7 +295,7 @@ exports.sendChangeNameOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    await sendSms(phone, `Your GemMarket verification code to update name is ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
+    await sendSms(phone, `Your Manik verification code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
 
     return res.json({ success: true, message: 'OTP sent to your registered phone number.' });
   } catch (err) {
@@ -325,7 +333,7 @@ exports.verifyChangeNameOtp = async (req, res) => {
     return res.json({
       success: true,
       message: 'Name updated successfully.',
-      user: { id: user._id, phone: user.phone, name: user.name },
+      user: { id: user._id, phone: user.phone, name: user.name, profileImage: user.profileImage },
     });
   } catch (err) {
     console.error('verifyChangeNameOtp error:', err);
@@ -359,7 +367,7 @@ exports.sendDeleteAccountOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    await sendSms(phone, `ALERT: Your GemMarket account deletion code is ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
+    await sendSms(phone, `ALERT: Your Manik account deletion code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
 
     return res.json({ success: true, message: 'Deletion OTP sent to your registered phone number.' });
   } catch (err) {
@@ -395,5 +403,40 @@ exports.verifyDeleteAccountOtp = async (req, res) => {
   } catch (err) {
     console.error('verifyDeleteAccountOtp error:', err);
     return res.status(500).json({ success: false, message: 'Could not delete account.' });
+  }
+};
+
+// --------------------------------------------------------------------------
+// UPLOAD PROFILE IMAGE (Protected Route)
+// --------------------------------------------------------------------------
+exports.uploadProfileImage = async (req, res) => {
+  try {
+    const { base64Image } = req.body;
+
+    if (!base64Image) {
+      return res.status(400).json({ success: false, message: 'No image provided.' });
+    }
+
+    // Upload directly to Cloudinary using the base64 string
+    const result = await cloudinary.uploader.upload(`data:image/jpeg;base64,${base64Image}`, {
+      folder: 'manik_profiles',
+      width: 500,
+      height: 500,
+      crop: 'fill', // Forces a perfect square
+    });
+
+    // Update the user's database record
+    const user = await User.findById(req.user._id);
+    user.profileImage = result.secure_url;
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'Profile image updated.',
+      user: { id: user._id, phone: user.phone, name: user.name, profileImage: user.profileImage },
+    });
+  } catch (err) {
+    console.error('Cloudinary Upload Error:', err);
+    return res.status(500).json({ success: false, message: 'Could not upload image.' });
   }
 };

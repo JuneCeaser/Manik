@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       required: true,
-      unique: true, // this is what makes each user unique in the system
+      unique: true,
       trim: true,
     },
     name: {
@@ -17,11 +17,15 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: true,
-      select: false, // never comes back on a normal find() unless you ask for it
+      select: false,
     },
     isVerified: {
       type: Boolean,
       default: false,
+    },
+    profileImage: {
+      type: String,
+      default: '',
     },
   },
   { timestamps: true }
