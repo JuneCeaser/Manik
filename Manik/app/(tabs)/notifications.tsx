@@ -1,12 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 
-export default function HomeScreen() {
+export default function NotificationsScreen() {
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" />
-      <Text style={styles.title}>Home</Text>
+      <Text style={styles.title}>Notifications</Text>
     </View>
   );
 }

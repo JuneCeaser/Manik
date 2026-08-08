@@ -1,12 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 
-export default function HomeScreen() {
+export default function AddScreen() {
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" />
-      <Text style={styles.title}>Home</Text>
+      <Text style={styles.title}>Add New Gem</Text>
     </View>
   );
 }
