@@ -1,44 +1,48 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-
-// This component handles the redirection logic
+// Separated routing logic to access the useAuth hook
 function RootLayoutNav() {
   const { userToken, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
+    // Stop and wait if AsyncStorage is still being checked
     if (isLoading) return;
 
-    // Check if the current route is in the (tabs) group
-    const inApp = segments[0] === '(tabs)';
+    const inTabsGroup = segments[0] === '(tabs)';
 
-    if (!userToken && inApp) {
-      // If not logged in and trying to access the app, redirect to login
-      router.replace('/login');
-    } else if (userToken && !inApp) {
-      // If logged in and on the login/register/forgot-password screen, redirect to app
+    if (userToken && !inTabsGroup) {
+      // Logged in but outside tabs -> push to dashboard
       router.replace('/(tabs)');
+    } else if (!userToken && inTabsGroup) {
+      // Not logged in but trying to view tabs -> push to login
+      router.replace('/login');
     }
   }, [userToken, isLoading, segments]);
 
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="login" />
-      <Stack.Screen name="register" />
-      <Stack.Screen name="forgot-password" />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-    </Stack>
-  );
+  // Display a smooth loading screen to prevent the Auth Flash
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
+
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <RootLayoutNav />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
