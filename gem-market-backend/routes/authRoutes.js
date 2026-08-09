@@ -10,8 +10,7 @@ const {
   verifyForgotPasswordOtp,
   sendChangePasswordOtp,
   verifyChangePasswordOtp,
-  sendChangeNameOtp,
-  verifyChangeNameOtp,
+  changeName, // <-- Replaced the two OTP functions with this single function
   sendDeleteAccountOtp,
   verifyDeleteAccountOtp,
   uploadProfileImage,
@@ -29,13 +28,11 @@ router.post('/forgot-password/verify-otp', verifyForgotPasswordOtp);
 router.post('/change-password/send-otp', protect, otpRateLimiter, sendChangePasswordOtp);
 router.post('/change-password/verify-otp', protect, verifyChangePasswordOtp);
 
-router.post('/change-name/send-otp', protect, otpRateLimiter, sendChangeNameOtp);
-router.post('/change-name/verify-otp', protect, verifyChangeNameOtp);
-
 router.post('/delete-account/send-otp', protect, otpRateLimiter, sendDeleteAccountOtp);
 router.post('/delete-account/verify-otp', protect, verifyDeleteAccountOtp);
 
-// Profile Image Route
+// Direct Updates (No OTP Required)
+router.put('/change-name', protect, changeName); // <-- New clean route
 router.put('/profile-image', protect, uploadProfileImage);
 
 module.exports = router;

@@ -39,6 +39,7 @@ export default function ProfileScreen() {
     setOtpCode('');
   };
 
+  // Image Upload
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
@@ -86,47 +87,36 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleSendNameOtp = async () => {
+  // --------------------------------------------------------------------------
+  // DIRECT NAME CHANGE (No OTP)
+  // --------------------------------------------------------------------------
+  const handleChangeName = async () => {
     if (!newName.trim()) return Alert.alert('Required', 'Please enter a new name.');
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/change-name/send-otp`, {
-        method: 'POST',
+      const res = await fetch(`${API_BASE_URL}/change-name`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
         body: JSON.stringify({ newName }),
       });
       const data = await res.json();
-      if (data.success) setStep('OTP');
-      else Alert.alert('Error', data.message);
-    } catch {
-      Alert.alert('Error', 'Failed to connect.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyNameOtp = async () => {
-    if (otpCode.length !== 6) return Alert.alert('Required', 'Enter 6-digit OTP.');
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/change-name/verify-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
-        body: JSON.stringify({ code: otpCode }),
-      });
-      const data = await res.json();
       if (data.success) {
-        await loginState(userToken!, data.user);
+        await loginState(userToken!, data.user); // Instantly updates context & UI
         Alert.alert('Success', 'Name updated successfully.');
         closeModal();
-      } else Alert.alert('Error', data.message);
+      } else {
+        Alert.alert('Error', data.message);
+      }
     } catch {
-      Alert.alert('Error', 'Failed to verify.');
+      Alert.alert('Error', 'Failed to update name.');
     } finally {
       setLoading(false);
     }
   };
 
+  // --------------------------------------------------------------------------
+  // CHANGE PASSWORD FLOW
+  // --------------------------------------------------------------------------
   const handleSendPasswordOtp = async () => {
     if (!newPassword || newPassword.length < 6) return Alert.alert('Error', 'New password must be at least 6 characters.');
     setLoading(true);
@@ -166,6 +156,9 @@ export default function ProfileScreen() {
     }
   };
 
+  // --------------------------------------------------------------------------
+  // DELETE ACCOUNT FLOW
+  // --------------------------------------------------------------------------
   const handleSendDeleteOtp = async () => {
     setLoading(true);
     try {
@@ -271,28 +264,17 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
 
+            {/* DIRECT NAME CHANGE UI */}
             {activeModal === 'CHANGE_NAME' && (
-              step === 'INPUT' ? (
-                <>
-                  <TextInput style={styles.input} placeholder="New Full Name" value={newName} onChangeText={setNewName} />
-                  <Pressable style={styles.modalButton} onPress={handleSendNameOtp} disabled={loading}>
-                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Send OTP</Text>}
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  <TextInput 
-                    style={styles.input} placeholder="6-Digit OTP" keyboardType="number-pad" 
-                    maxLength={6} value={otpCode} onChangeText={setOtpCode}
-                    textContentType="oneTimeCode" autoComplete="sms-otp" importantForAutofill="yes"
-                  />
-                  <Pressable style={styles.modalButton} onPress={handleVerifyNameOtp} disabled={loading}>
-                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Verify & Update</Text>}
-                  </Pressable>
-                </>
-              )
+              <>
+                <TextInput style={styles.input} placeholder="New Full Name" value={newName} onChangeText={setNewName} />
+                <Pressable style={styles.modalButton} onPress={handleChangeName} disabled={loading}>
+                  {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Update Name</Text>}
+                </Pressable>
+              </>
             )}
 
+            {/* PASSWORD CHANGE UI (Kept OTP Step Logic) */}
             {activeModal === 'CHANGE_PASSWORD' && (
               step === 'INPUT' ? (
                 <>
@@ -315,6 +297,7 @@ export default function ProfileScreen() {
               )
             )}
 
+            {/* DELETE ACCOUNT UI (Kept OTP Step Logic) */}
             {activeModal === 'DELETE_ACCOUNT' && (
               step === 'INPUT' ? (
                 <>

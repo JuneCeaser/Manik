@@ -287,62 +287,24 @@ exports.verifyChangePasswordOtp = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Could not change password.' });
   }
 };
-
 // --------------------------------------------------------------------------
-// CHANGE NAME (Protected Route)
+// CHANGE NAME (Protected Route - No OTP Required)
 // --------------------------------------------------------------------------
-exports.sendChangeNameOtp = async (req, res) => {
+exports.changeName = async (req, res) => {
   try {
     const { newName } = req.body;
-    const phone = req.user.phone;
 
     if (!newName || newName.trim().length < 2) {
       return res.status(400).json({ success: false, message: 'Please provide a valid name.' });
     }
 
-    const code = generateOtp();
-
-    await Otp.findOneAndUpdate(
-      { phone, purpose: 'change_name' },
-      { code, payload: { name: newName.trim() }, attempts: 0, expiresAt: new Date(Date.now() + OTP_EXPIRY_MS) },
-      { upsert: true, new: true }
-    );
-
-    const smsPhone = formatForSms(phone);
-    await sendSms(smsPhone, `Your Manik verification code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
-
-    return res.json({ success: true, message: 'OTP sent to your registered phone number.' });
-  } catch (err) {
-    console.error('sendChangeNameOtp error:', err);
-    return res.status(500).json({ success: false, message: 'Could not send OTP.' });
-  }
-};
-
-exports.verifyChangeNameOtp = async (req, res) => {
-  try {
-    const phone = req.user.phone;
-    const { code } = req.body;
-
-    if (!code) {
-      return res.status(400).json({ success: false, message: 'OTP code is required.' });
-    }
-
-    const otpRecord = await Otp.findOne({ phone, purpose: 'change_name' });
-    if (!otpRecord || otpRecord.expiresAt < new Date()) {
-      return res.status(400).json({ success: false, message: 'OTP expired or not found.' });
-    }
-
-    if (otpRecord.code !== code) {
-      otpRecord.attempts += 1;
-      await otpRecord.save();
-      return res.status(400).json({ success: false, message: 'Incorrect OTP code.' });
-    }
-
     const user = await User.findById(req.user._id);
-    user.name = otpRecord.payload.name;
-    await user.save();
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
 
-    await Otp.deleteOne({ _id: otpRecord._id });
+    user.name = newName.trim();
+    await user.save();
 
     return res.json({
       success: true,
@@ -350,7 +312,7 @@ exports.verifyChangeNameOtp = async (req, res) => {
       user: { id: user._id, phone: user.phone, name: user.name, profileImage: user.profileImage },
     });
   } catch (err) {
-    console.error('verifyChangeNameOtp error:', err);
+    console.error('changeName error:', err);
     return res.status(500).json({ success: false, message: 'Could not change name.' });
   }
 };
