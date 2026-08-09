@@ -17,12 +17,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL, formatPhoneNumber } from '../constants/api';
+import { API_BASE_URL } from '../constants/api';
+import CountryCodePicker, {
+  Country,
+  DEFAULT_COUNTRY,
+  buildFullPhoneNumber,
+} from '../components/CountryCodePicker';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { loginState } = useAuth();
 
+  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -40,7 +46,7 @@ export default function LoginScreen() {
     if (phone.replace(/\D/g, '').length < 9) {
       Alert.alert(
         'Invalid phone number',
-        'Please enter a valid Sri Lankan phone number.'
+        'Please enter a valid phone number.'
       );
       return;
     }
@@ -54,7 +60,7 @@ export default function LoginScreen() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          phone: formatPhoneNumber(phone),
+          phone: buildFullPhoneNumber(country, phone),
           password,
         }),
       });
@@ -122,11 +128,9 @@ export default function LoginScreen() {
               <Text style={styles.label}>Phone number</Text>
 
               <View style={styles.inputWrapper}>
-                <Ionicons
-                  name="call-outline"
-                  size={20}
-                  color="#64748B"
-                  style={styles.inputIcon}
+                <CountryCodePicker
+                  selectedCountry={country}
+                  onSelect={setCountry}
                 />
 
                 <TextInput

@@ -16,7 +16,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import { API_BASE_URL, formatPhoneNumber } from '../constants/api';
+import { API_BASE_URL } from '../constants/api';
+import CountryCodePicker, {
+  Country,
+  DEFAULT_COUNTRY,
+  buildFullPhoneNumber,
+} from '../components/CountryCodePicker';
 
 type Step = 'PHONE' | 'OTP';
 
@@ -24,6 +29,7 @@ export default function ForgotPasswordScreen() {
   const router = useRouter();
 
   const [step, setStep] = useState<Step>('PHONE');
+  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [phone, setPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -43,7 +49,7 @@ export default function ForgotPasswordScreen() {
       const response = await fetch(`${API_BASE_URL}/forgot-password/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: formatPhoneNumber(phone) }),
+        body: JSON.stringify({ phone: buildFullPhoneNumber(country, phone) }),
       });
 
       const data = await response.json();
@@ -78,7 +84,7 @@ export default function ForgotPasswordScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone: formatPhoneNumber(phone),
+          phone: buildFullPhoneNumber(country, phone),
           code: otpCode,
           newPassword,
         }),
@@ -125,7 +131,10 @@ export default function ForgotPasswordScreen() {
                 <View style={styles.field}>
                   <Text style={styles.label}>Phone Number</Text>
                   <View style={styles.inputWrapper}>
-                    <Ionicons name="call-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                    <CountryCodePicker
+                      selectedCountry={country}
+                      onSelect={setCountry}
+                    />
                     <TextInput
                       style={styles.input}
                       placeholder="077 123 4567"
@@ -147,7 +156,9 @@ export default function ForgotPasswordScreen() {
             ) : (
               <>
                 <Text style={styles.title}>Set New Password</Text>
-                <Text style={styles.subtitle}>Enter the 6-digit code sent to +{formatPhoneNumber(phone)}</Text>
+                <Text style={styles.subtitle}>
+                  Enter the 6-digit code sent to +{buildFullPhoneNumber(country, phone)}
+                </Text>
 
                 <TextInput
                   style={styles.otpInput}
