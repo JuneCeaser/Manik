@@ -1,21 +1,21 @@
 const bcrypt = require('bcryptjs');
-const cloudinary = require('cloudinary').v2;
 const User = require('../models/User');
 const Otp = require('../models/Otp');
 const generateOtp = require('../utils/generateOtp');
 const sendSms = require('../utils/sendSms');
 const generateToken = require('../utils/generateToken');
+const ImageKit = require('imagekit');
 
 const OTP_EXPIRY_MS = (Number(process.env.OTP_EXPIRY_MINUTES) || 5) * 60 * 1000;
 const MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS) || 5;
 
 const isValidPhone = (phone) => /^\d{9,12}$/.test(phone);
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+// Configure ImageKit
+const imagekit = new ImageKit({
+  publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+  privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
 });
 
 // --------------------------------------------------------------------------
@@ -407,7 +407,7 @@ exports.verifyDeleteAccountOtp = async (req, res) => {
 };
 
 // --------------------------------------------------------------------------
-// UPLOAD PROFILE IMAGE (Protected Route)
+// UPLOAD PROFILE IMAGE (Protected Route - ImageKit Version)
 // --------------------------------------------------------------------------
 exports.uploadProfileImage = async (req, res) => {
   try {
@@ -417,17 +417,16 @@ exports.uploadProfileImage = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No image provided.' });
     }
 
-    // Upload directly to Cloudinary using the base64 string
-    const result = await cloudinary.uploader.upload(`data:image/jpeg;base64,${base64Image}`, {
-      folder: 'manik_profiles',
-      width: 500,
-      height: 500,
-      crop: 'fill', // Forces a perfect square
+    // Upload directly to ImageKit using the plain base64 string
+    const result = await imagekit.upload({
+      file: base64Image, 
+      fileName: `avatar_${req.user._id}.jpg`,
+      folder: '/manik_profiles',
     });
 
-    // Update the user's database record
+    // ImageKit returns the secure image link in the 'url' property
     const user = await User.findById(req.user._id);
-    user.profileImage = result.secure_url;
+    user.profileImage = result.url;
     await user.save();
 
     return res.json({
@@ -436,7 +435,7 @@ exports.uploadProfileImage = async (req, res) => {
       user: { id: user._id, phone: user.phone, name: user.name, profileImage: user.profileImage },
     });
   } catch (err) {
-    console.error('Cloudinary Upload Error:', err);
+    console.error('ImageKit Upload Error:', err);
     return res.status(500).json({ success: false, message: 'Could not upload image.' });
   }
 };
