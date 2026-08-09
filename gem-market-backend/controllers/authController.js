@@ -11,6 +11,16 @@ const MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS) || 5;
 
 const isValidPhone = (phone) => /^\d{9,12}$/.test(phone);
 
+// Helper to format old numbers (e.g., 077...) to international for Text.lk 
+// without breaking new numbers that already have country codes.
+const formatForSms = (phone) => {
+  let clean = phone.replace(/\D/g, '');
+  if (phone.startsWith('0')) {
+    return `94${clean.substring(1)}`;
+  }
+  return clean;
+};
+
 // Configure ImageKit
 const imagekit = new ImageKit({
   publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
@@ -25,7 +35,7 @@ exports.sendRegisterOtp = async (req, res) => {
   try {
     const { phone, name, password } = req.body;
 
-    if (!phone || !name || !password || !isValidPhone(phone)) {
+    if (!phone || !name || !password || !isValidPhone(phone.replace(/\D/g, ''))) {
       return res.status(400).json({ success: false, message: 'Phone, name, and password are required.' });
     }
     if (password.length < 6) {
@@ -46,7 +56,8 @@ exports.sendRegisterOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    await sendSms(phone, `Your Manik verification code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
+    const smsPhone = formatForSms(phone);
+    await sendSms(smsPhone, `Your Manik verification code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
 
     return res.json({ success: true, message: 'OTP sent successfully.' });
   } catch (err) {
@@ -145,7 +156,7 @@ exports.sendForgotPasswordOtp = async (req, res) => {
   try {
     const { phone } = req.body;
 
-    if (!phone || !isValidPhone(phone)) {
+    if (!phone || !isValidPhone(phone.replace(/\D/g, ''))) {
       return res.status(400).json({ success: false, message: 'Valid phone number is required.' });
     }
 
@@ -162,7 +173,8 @@ exports.sendForgotPasswordOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    await sendSms(phone, `Your Manik password reset code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
+    const smsPhone = formatForSms(phone);
+    await sendSms(smsPhone, `Your Manik password reset code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
 
     return res.json({ success: true, message: 'Password reset OTP sent.' });
   } catch (err) {
@@ -229,7 +241,8 @@ exports.sendChangePasswordOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    await sendSms(phone, `Your Manik verification code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
+    const smsPhone = formatForSms(phone);
+    await sendSms(smsPhone, `Your Manik verification code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
 
     return res.json({ success: true, message: 'OTP sent to your registered phone number.' });
   } catch (err) {
@@ -295,7 +308,8 @@ exports.sendChangeNameOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    await sendSms(phone, `Your Manik verification code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
+    const smsPhone = formatForSms(phone);
+    await sendSms(smsPhone, `Your Manik verification code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
 
     return res.json({ success: true, message: 'OTP sent to your registered phone number.' });
   } catch (err) {
@@ -346,28 +360,21 @@ exports.verifyChangeNameOtp = async (req, res) => {
 // --------------------------------------------------------------------------
 exports.sendDeleteAccountOtp = async (req, res) => {
   try {
-    const { password } = req.body;
     const phone = req.user.phone;
 
-    if (!password) {
-      return res.status(400).json({ success: false, message: 'Password is required to request deletion.' });
-    }
-
-    const user = await User.findById(req.user._id).select('+password');
-    const isMatch = await user.matchPassword(password);
-    if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Incorrect password.' });
-    }
-
+    // Generate the 6-digit OTP
     const code = generateOtp();
 
+    // Save it to the database
     await Otp.findOneAndUpdate(
       { phone, purpose: 'delete_account' },
       { code, attempts: 0, expiresAt: new Date(Date.now() + OTP_EXPIRY_MS) },
       { upsert: true, new: true }
     );
 
-    await sendSms(phone, `ALERT: Your Manik account deletion code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
+    // Format the phone number and send the SMS
+    const smsPhone = formatForSms(phone);
+    await sendSms(smsPhone, `ALERT: Your Manik account deletion code is: ${code}. Expires in ${process.env.OTP_EXPIRY_MINUTES || 5} mins.`);
 
     return res.json({ success: true, message: 'Deletion OTP sent to your registered phone number.' });
   } catch (err) {
@@ -396,6 +403,20 @@ exports.verifyDeleteAccountOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Incorrect OTP code.' });
     }
 
+    // 1. Find the user first to access profileImageId
+    const user = await User.findById(req.user._id);
+
+    // 2. If they have an image, delete it from ImageKit
+    if (user && user.profileImageId) {
+      try {
+        await imagekit.deleteFile(user.profileImageId);
+        console.log('Successfully deleted image from ImageKit');
+      } catch (imgError) {
+        console.error('Failed to delete image from ImageKit:', imgError);
+      }
+    }
+
+    // 3. Delete the user from MongoDB
     await User.findByIdAndDelete(req.user._id);
     await Otp.deleteMany({ phone });
 
@@ -417,16 +438,15 @@ exports.uploadProfileImage = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No image provided.' });
     }
 
-    // Upload directly to ImageKit using the plain base64 string
     const result = await imagekit.upload({
       file: base64Image, 
       fileName: `avatar_${req.user._id}.jpg`,
       folder: '/manik_profiles',
     });
 
-    // ImageKit returns the secure image link in the 'url' property
     const user = await User.findById(req.user._id);
     user.profileImage = result.url;
+    user.profileImageId = result.fileId; // Save the file ID for future deletion
     await user.save();
 
     return res.json({

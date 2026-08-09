@@ -28,7 +28,6 @@ export default function ProfileScreen() {
 
   // Form States
   const [newName, setNewName] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
 
@@ -36,7 +35,6 @@ export default function ProfileScreen() {
     setActiveModal('NONE');
     setStep('INPUT');
     setNewName('');
-    setCurrentPassword('');
     setNewPassword('');
     setOtpCode('');
   };
@@ -169,13 +167,11 @@ export default function ProfileScreen() {
   };
 
   const handleSendDeleteOtp = async () => {
-    if (!currentPassword) return Alert.alert('Required', 'Enter your password to proceed.');
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/delete-account/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
-        body: JSON.stringify({ password: currentPassword }),
       });
       const data = await res.json();
       if (data.success) setStep('OTP');
@@ -322,15 +318,17 @@ export default function ProfileScreen() {
             {activeModal === 'DELETE_ACCOUNT' && (
               step === 'INPUT' ? (
                 <>
-                  <Text style={{ color: '#64748B', marginBottom: 12 }}>Enter your password to request deletion OTP.</Text>
-                  <TextInput style={styles.input} placeholder="Current Password" secureTextEntry value={currentPassword} onChangeText={setCurrentPassword} />
+                  <Text style={{ color: '#EF4444', marginBottom: 16, fontSize: 15, lineHeight: 22, fontWeight: '500' }}>
+                    Are you sure you want to delete your account? This action is permanent and cannot be undone. All your data and images will be erased.
+                  </Text>
+                  
                   <Pressable style={[styles.modalButton, { backgroundColor: '#EF4444' }]} onPress={handleSendDeleteOtp} disabled={loading}>
-                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Confirm & Send OTP</Text>}
+                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Yes, Send OTP</Text>}
                   </Pressable>
                 </>
               ) : (
                 <>
-                  <Text style={{ color: '#EF4444', marginBottom: 12 }}>Warning: This action is permanent.</Text>
+                  <Text style={{ color: '#EF4444', marginBottom: 12 }}>Enter the 6-digit code sent to your phone to confirm deletion.</Text>
                   <TextInput 
                     style={styles.input} placeholder="6-Digit OTP" keyboardType="number-pad" 
                     maxLength={6} value={otpCode} onChangeText={setOtpCode}

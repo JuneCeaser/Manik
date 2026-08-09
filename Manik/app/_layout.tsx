@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 
+
 // This component handles the redirection logic
 function RootLayoutNav() {
   const { userToken, isLoading } = useAuth();
