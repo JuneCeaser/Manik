@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,6 +26,7 @@ export default function ProfileScreen() {
   const [step, setStep] = useState<'INPUT' | 'OTP'>('INPUT');
   const [loading, setLoading] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Form States
   const [newName, setNewName] = useState('');
@@ -38,6 +40,42 @@ export default function ProfileScreen() {
     setNewPassword('');
     setOtpCode('');
   };
+
+  // --------------------------------------------------------------------------
+  // REFRESH & PROFILE STATUS CHECK (Handles Deleted Account Scenario)
+  // --------------------------------------------------------------------------
+  const onRefresh = useCallback(async () => {
+    if (!userToken) return;
+    setRefreshing(true);
+    try {
+      // Fetch latest profile state from backend to verify user still exists
+      const res = await fetch(`${API_BASE_URL}/profile`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${userToken}`,
+        },
+      });
+
+      const data = await res.json();
+
+      // If the account was deleted by admin or token is invalid (401)
+      if (res.status === 401 || !data.success) {
+        Alert.alert('Session Expired', 'Your account has been deleted or is no longer valid.');
+        logout();
+        return;
+      }
+
+      if (data.user) {
+        // Sync context with latest data
+        await loginState(userToken, data.user);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to refresh profile data.');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [userToken, logout, loginState]);
 
   // Image Upload
   const pickImage = async () => {
@@ -75,6 +113,12 @@ export default function ProfileScreen() {
 
       const data = await res.json();
 
+      if (res.status === 401) {
+        Alert.alert('Unauthorized', 'Your account no longer exists.');
+        logout();
+        return;
+      }
+
       if (data.success) {
         await loginState(userToken!, data.user);
       } else {
@@ -100,8 +144,15 @@ export default function ProfileScreen() {
         body: JSON.stringify({ newName }),
       });
       const data = await res.json();
+
+      if (res.status === 401) {
+        Alert.alert('Unauthorized', 'Your account no longer exists.');
+        logout();
+        return;
+      }
+
       if (data.success) {
-        await loginState(userToken!, data.user); // Instantly updates context & UI
+        await loginState(userToken!, data.user); 
         Alert.alert('Success', 'Name updated successfully.');
         closeModal();
       } else {
@@ -126,6 +177,10 @@ export default function ProfileScreen() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
       });
       const data = await res.json();
+      if (res.status === 401) {
+        logout();
+        return;
+      }
       if (data.success) setStep('OTP');
       else Alert.alert('Error', data.message);
     } catch {
@@ -145,6 +200,10 @@ export default function ProfileScreen() {
         body: JSON.stringify({ code: otpCode, newPassword }),
       });
       const data = await res.json();
+      if (res.status === 401) {
+        logout();
+        return;
+      }
       if (data.success) {
         Alert.alert('Success', 'Password updated.');
         closeModal();
@@ -167,6 +226,10 @@ export default function ProfileScreen() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
       });
       const data = await res.json();
+      if (res.status === 401) {
+        logout();
+        return;
+      }
       if (data.success) setStep('OTP');
       else Alert.alert('Error', data.message);
     } catch {
@@ -199,7 +262,13 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.scrollContent}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />
+      }
+    >
       <Text style={styles.headerTitle}>Manik Dashboard</Text>
 
       {user && (
@@ -274,7 +343,7 @@ export default function ProfileScreen() {
               </>
             )}
 
-            {/* PASSWORD CHANGE UI (Kept OTP Step Logic) */}
+            {/* PASSWORD CHANGE UI */}
             {activeModal === 'CHANGE_PASSWORD' && (
               step === 'INPUT' ? (
                 <>
@@ -297,7 +366,7 @@ export default function ProfileScreen() {
               )
             )}
 
-            {/* DELETE ACCOUNT UI (Kept OTP Step Logic) */}
+            {/* DELETE ACCOUNT UI */}
             {activeModal === 'DELETE_ACCOUNT' && (
               step === 'INPUT' ? (
                 <>

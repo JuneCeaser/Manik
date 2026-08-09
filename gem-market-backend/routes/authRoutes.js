@@ -13,6 +13,7 @@ const {
   changeName, 
   sendDeleteAccountOtp,
   verifyDeleteAccountOtp,
+  getUserProfile,
   uploadProfileImage,
 } = require('../controllers/authController');
 
@@ -34,5 +35,6 @@ router.post('/delete-account/verify-otp', protect, verifyDeleteAccountOtp);
 // Direct Updates (No OTP Required)
 router.put('/change-name', protect, changeName); // <-- New clean route
 router.put('/profile-image', protect, uploadProfileImage);
+router.get('/profile', protect, getUserProfile);
 
 module.exports = router;

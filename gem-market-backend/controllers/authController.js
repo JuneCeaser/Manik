@@ -317,6 +317,23 @@ exports.changeName = async (req, res) => {
   }
 };
 
+// GET USER PROFILE (Protected Route)
+exports.getUserProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    return res.json({
+      success: true,
+      user: { id: user._id, phone: user.phone, name: user.name, profileImage: user.profileImage },
+    });
+  } catch (err) {
+    console.error('getUserProfile error:', err);
+    return res.status(500).json({ success: false, message: 'Could not fetch profile.' });
+  }
+};
+
 // --------------------------------------------------------------------------
 // DELETE ACCOUNT (Protected Route)
 // --------------------------------------------------------------------------
