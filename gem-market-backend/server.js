@@ -9,10 +9,12 @@ const app = express();
 
 connectDB();
 
+// Middleware
 app.use(cors());
-// Increased limit to 10mb for Base64 image uploads
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' })); // Updated to 50mb to prevent image upload crashes
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 
