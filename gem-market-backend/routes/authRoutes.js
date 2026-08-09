@@ -10,7 +10,7 @@ const {
   verifyForgotPasswordOtp,
   sendChangePasswordOtp,
   verifyChangePasswordOtp,
-  changeName, // <-- Replaced the two OTP functions with this single function
+  changeName, 
   sendDeleteAccountOtp,
   verifyDeleteAccountOtp,
   uploadProfileImage,
