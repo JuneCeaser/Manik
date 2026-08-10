@@ -1,6 +1,6 @@
-// controllers/adminController.js
 const Admin = require('../models/Admin');
 const User = require('../models/User');
+const Payment = require('../models/Payment');
 const bcrypt = require('bcryptjs');
 const generateToken = require('../utils/generateToken');
 const ImageKit = require('imagekit');
@@ -15,7 +15,6 @@ const imagekit = new ImageKit({
 // ADMIN AUTHENTICATION
 // --------------------------------------------------------------------------
 
-// TEMPORARY: Use this once to create your first admin account, then delete it or comment it out!
 exports.createFirstAdmin = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -46,7 +45,6 @@ exports.loginAdmin = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    // Use your existing generateToken utility
     const token = generateToken(admin);
 
     return res.json({
@@ -88,5 +86,45 @@ exports.deleteUser = async (req, res) => {
     return res.json({ success: true, message: 'User deleted.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Could not delete user.' });
+  }
+};
+
+// --------------------------------------------------------------------------
+// ADMIN PAYMENT APPROVAL ACTIONS (New)
+// --------------------------------------------------------------------------
+exports.getPendingPayments = async (req, res) => {
+  try {
+    const payments = await Payment.find({ status: 'PENDING' })
+      .populate('user', 'name phone')
+      .sort({ createdAt: -1 });
+    
+    return res.json({ success: true, payments });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch pending payments.' });
+  }
+};
+
+exports.approvePayment = async (req, res) => {
+  try {
+    const payment = await Payment.findById(req.params.id);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found.' });
+    }
+    if (payment.status !== 'PENDING') {
+      return res.status(400).json({ success: false, message: 'Payment already processed.' });
+    }
+
+    payment.status = 'APPROVED';
+    await payment.save();
+
+    const user = await User.findById(payment.user);
+    if (user) {
+      user.adCredits += payment.adCreditsAdded;
+      await user.save();
+    }
+
+    return res.json({ success: true, message: 'Payment approved and credits added.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to approve payment.' });
   }
 };

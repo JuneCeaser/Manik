@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   View,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,14 +16,52 @@ import { Redirect } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../constants/api';
 
+type PaymentHistory = {
+  _id: string;
+  amount: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+};
+
 export default function SubscriptionScreen() {
   const { userToken } = useAuth();
 
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [slipImage, setSlipImage] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'NONE' | 'MANUAL' | 'PAYHERE'>('NONE');
+  const [myPayments, setMyPayments] = useState<PaymentHistory[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
 
-  // AUTH GUARD: If user is not logged in, redirect to login page
+  const fetchHistory = async () => {
+    if (!userToken) return;
+    try {
+      const res = await fetch(`${API_BASE_URL.replace('/auth', '')}/payments/my-payments`, {
+        headers: { Authorization: `Bearer ${userToken}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMyPayments(data.payments);
+      }
+    } catch (error) {
+      console.log('Failed to fetch history', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, [userToken]);
+
+  // Pull-to-refresh handler
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchHistory();
+    setRefreshing(false);
+  }, [userToken]);
+
+  // AUTH GUARD: Placed safely after all hooks are declared
   if (!userToken) {
     return <Redirect href="/login" />;
   }
@@ -54,8 +93,6 @@ export default function SubscriptionScreen() {
 
     setLoading(true);
     try {
-      // Fix: Safely replace '/auth' if your API_BASE_URL includes it, 
-      // so it points to /api/payments instead of /api/auth/payments
       const res = await fetch(`${API_BASE_URL.replace('/auth', '')}/payments/manual-slip`, {
         method: 'POST',
         headers: {
@@ -77,6 +114,7 @@ export default function SubscriptionScreen() {
         );
         setSlipImage(null);
         setPaymentMethod('NONE');
+        fetchHistory();
       } else {
         Alert.alert('Upload Failed', data.message || 'Something went wrong.');
       }
@@ -88,8 +126,20 @@ export default function SubscriptionScreen() {
     }
   };
 
+  const getStatusColor = (status: string) => {
+    if (status === 'APPROVED') return '#10B981';
+    if (status === 'REJECTED') return '#EF4444';
+    return '#F59E0B'; // Pending (Orange)
+  };
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.scrollContent}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />
+      }
+    >
       
       {/* Header */}
       <View style={styles.header}>
@@ -173,6 +223,31 @@ export default function SubscriptionScreen() {
         </View>
       )}
 
+      {/* PAYMENT HISTORY & STATUS TRACKER */}
+      {paymentMethod === 'NONE' && (
+        <View style={styles.historyContainer}>
+          <Text style={styles.historyTitle}>Payment History</Text>
+          
+          {loadingHistory ? (
+            <ActivityIndicator size="small" color="#2563EB" style={{ marginTop: 20 }} />
+          ) : myPayments.length === 0 ? (
+            <Text style={styles.emptyText}>No previous payments found.</Text>
+          ) : (
+            myPayments.map((payment) => (
+              <View key={payment._id} style={styles.historyCard}>
+                <View>
+                  <Text style={styles.historyAmount}>30 Ad Credits (Rs. {payment.amount})</Text>
+                  <Text style={styles.historyDate}>{new Date(payment.createdAt).toLocaleDateString()}</Text>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(payment.status) }]}>
+                  <Text style={styles.statusText}>{payment.status}</Text>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+      )}
+
     </ScrollView>
   );
 }
@@ -197,4 +272,13 @@ const styles = StyleSheet.create({
   previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   submitButton: { backgroundColor: '#10B981', padding: 16, borderRadius: 12, alignItems: 'center' },
   submitButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  
+  historyContainer: { marginTop: 30 },
+  historyTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 16 },
+  emptyText: { color: '#64748B', fontStyle: 'italic', marginTop: 10 },
+  historyCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 16, marginBottom: 12, elevation: 1 },
+  historyAmount: { fontSize: 15, fontWeight: '700', color: '#334155', marginBottom: 4 },
+  historyDate: { fontSize: 13, color: '#94A3B8' },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  statusText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
 });

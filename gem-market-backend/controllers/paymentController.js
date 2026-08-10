@@ -18,17 +18,15 @@ exports.submitManualSlip = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Bank slip image is required.' });
     }
 
-    // 1. Upload Bank Slip image to ImageKit
     const uploadResponse = await imagekit.upload({
       file: base64Image,
       fileName: `slip_${req.user._id}_${Date.now()}.jpg`,
       folder: '/bank_slips',
     });
 
-    // 2. Create Payment Record with PENDING status
     const payment = await Payment.create({
       user: req.user._id,
-      amount: amount || 990, // Launch bundle price (Rs. 990)
+      amount: amount || 990,
       method: 'MANUAL_SLIP',
       status: 'PENDING',
       adCreditsAdded: 30,
@@ -44,5 +42,18 @@ exports.submitManualSlip = async (req, res) => {
   } catch (err) {
     console.error('submitManualSlip Error:', err);
     return res.status(500).json({ success: false, message: 'Failed to upload bank slip.' });
+  }
+};
+
+// @desc    Get logged in user's payment history
+// @route   GET /api/payments/my-payments
+// @access  Private (User)
+exports.getMyPayments = async (req, res) => {
+  try {
+    const payments = await Payment.find({ user: req.user._id }).sort({ createdAt: -1 });
+    return res.json({ success: true, payments });
+  } catch (err) {
+    console.error('getMyPayments Error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to fetch payments.' });
   }
 };

@@ -122,7 +122,17 @@ exports.verifyRegisterOtp = async (req, res) => {
     return res.json({
       success: true,
       token,
-      user: { id: user._id, phone: user.phone, name: user.name, profileImage: user.profileImage },
+      user: { 
+        id: user._id, 
+        phone: user.phone, 
+        name: user.name, 
+        profileImage: user.profileImage,
+        whatsappCountryCode: user.whatsappCountryCode,
+        whatsappNumber: user.whatsappNumber,
+        province: user.province,
+        city: user.city,
+        adCredits: user.adCredits 
+      },
     });
   } catch (err) {
     console.error('verifyRegisterOtp error:', err);
@@ -154,7 +164,17 @@ exports.login = async (req, res) => {
     return res.json({
       success: true,
       token,
-      user: { id: user._id, phone: user.phone, name: user.name, profileImage: user.profileImage },
+      user: { 
+        id: user._id, 
+        phone: user.phone, 
+        name: user.name, 
+        profileImage: user.profileImage,
+        whatsappCountryCode: user.whatsappCountryCode,
+        whatsappNumber: user.whatsappNumber,
+        province: user.province,
+        city: user.city,
+        adCredits: user.adCredits 
+      },
     });
   } catch (err) {
     console.error('login error:', err);
@@ -322,7 +342,17 @@ exports.changeName = async (req, res) => {
     return res.json({
       success: true,
       message: 'Name updated successfully.',
-      user: { id: user._id, phone: user.phone, name: user.name, profileImage: user.profileImage },
+      user: { 
+        id: user._id, 
+        phone: user.phone, 
+        name: user.name, 
+        profileImage: user.profileImage,
+        whatsappCountryCode: user.whatsappCountryCode,
+        whatsappNumber: user.whatsappNumber,
+        province: user.province,
+        city: user.city,
+        adCredits: user.adCredits 
+      },
     });
   } catch (err) {
     console.error('changeName error:', err);
@@ -367,6 +397,7 @@ exports.updateWhatsappNumber = async (req, res) => {
         whatsappNumber: user.whatsappNumber,
         province: user.province,
         city: user.city,
+        adCredits: user.adCredits,
       },
     });
   } catch (err) {
@@ -416,6 +447,7 @@ exports.updateLocation = async (req, res) => {
         whatsappNumber: user.whatsappNumber,
         province: user.province,
         city: user.city,
+        adCredits: user.adCredits,
       },
     });
   } catch (err) {
@@ -442,6 +474,7 @@ exports.getUserProfile = async (req, res) => {
         whatsappNumber: user.whatsappNumber,
         province: user.province,
         city: user.city,
+        adCredits: user.adCredits, // <-- Added adCredits here
       },
     });
   } catch (err) {
@@ -547,7 +580,17 @@ exports.uploadProfileImage = async (req, res) => {
     return res.json({
       success: true,
       message: 'Profile image updated.',
-      user: { id: user._id, phone: user.phone, name: user.name, profileImage: user.profileImage },
+      user: { 
+        id: user._id, 
+        phone: user.phone, 
+        name: user.name, 
+        profileImage: user.profileImage,
+        whatsappCountryCode: user.whatsappCountryCode,
+        whatsappNumber: user.whatsappNumber,
+        province: user.province,
+        city: user.city,
+        adCredits: user.adCredits 
+      },
     });
   } catch (err) {
     console.error('ImageKit Upload Error:', err);

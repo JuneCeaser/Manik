@@ -13,14 +13,26 @@ type User = {
   createdAt: string;
 };
 
+type Payment = {
+  _id: string;
+  amount: number;
+  slipImage: string;
+  createdAt: string;
+  user: {
+    name: string;
+    phone: string;
+  };
+};
+
 export default function Dashboard() {
   const [users, setUsers] = useState<User[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchData = async () => {
       const token = localStorage.getItem('adminToken');
       if (!token) {
         navigate('/login');
@@ -28,16 +40,27 @@ export default function Dashboard() {
       }
 
       try {
-        const res = await fetch('http://localhost:5000/api/admin/users', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
+        const [userRes, payRes] = await Promise.all([
+          fetch('http://localhost:5000/api/admin/users', {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch('http://localhost:5000/api/admin/payments/pending', {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
 
-        if (data.success) {
-          setUsers(data.users);
-        } else {
-          setError(data.message || 'Failed to load users');
-          if (res.status === 401) navigate('/login');
+        const userData = await userRes.json();
+        const payData = await payRes.json();
+
+        if (userData.success) {
+          setUsers(userData.users);
+        }
+        if (payData.success) {
+          setPayments(payData.payments);
+        }
+
+        if (userRes.status === 401 || payRes.status === 401) {
+          navigate('/login');
         }
       } catch {
         setError('Failed to connect to the server.');
@@ -46,8 +69,30 @@ export default function Dashboard() {
       }
     };
 
-    fetchUsers();
+    fetchData();
   }, [navigate]);
+
+  const handleApprovePayment = async (paymentId: string) => {
+    if (!window.confirm('Approve this bank slip and grant 30 ad credits?')) return;
+
+    const token = localStorage.getItem('adminToken');
+    try {
+      const res = await fetch(`http://localhost:5000/api/admin/payments/${paymentId}/approve`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setPayments(payments.filter((p) => p._id !== paymentId));
+        alert('Payment approved successfully!');
+      } else {
+        alert(data.message || 'Failed to approve payment');
+      }
+    } catch {
+      alert('Failed to connect to the server.');
+    }
+  };
 
   const handleDeleteUser = async (userId: string, userName: string) => {
     if (!window.confirm(`Are you sure you want to delete ${userName}?`)) return;
@@ -90,13 +135,76 @@ export default function Dashboard() {
       </nav>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
+        <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div className="rounded-2xl bg-white p-6 shadow-sm">
             <p className="text-sm font-medium text-slate-500">Total App Users</p>
             <p className="mt-2 text-3xl font-bold" style={{ color: '#0f172a' }}>{users.length}</p>
           </div>
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">Pending Bank Slips</p>
+            <p className="mt-2 text-3xl font-bold text-blue-600">{payments.length}</p>
+          </div>
         </div>
 
+        {error && <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-xl">{error}</div>}
+
+        {/* PENDING BANK SLIPS SECTION */}
+        <div className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm border border-blue-100">
+          <div className="border-b border-slate-100 bg-blue-50/50 px-6 py-4">
+            <h2 className="text-lg font-bold text-slate-900">Pending Bank Slips Approval</h2>
+          </div>
+
+          {loading ? (
+            <div className="p-8 text-center text-slate-500">Loading pending slips...</div>
+          ) : payments.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">No pending bank slips.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    <th className="px-6 py-4">Slip Preview</th>
+                    <th className="px-6 py-4">User Details</th>
+                    <th className="px-6 py-4">Amount</th>
+                    <th className="px-6 py-4">Submitted Date</th>
+                    <th className="px-6 py-4 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
+                  {payments.map((payment) => (
+                    <tr key={payment._id} className="hover:bg-slate-50/50">
+                      <td className="px-6 py-4">
+                        <a href={payment.slipImage} target="_blank" rel="noreferrer">
+                          <img
+                            src={payment.slipImage}
+                            alt="Bank Slip"
+                            className="h-16 w-12 object-cover rounded border border-slate-200 cursor-pointer hover:opacity-80 shadow-sm"
+                          />
+                        </a>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="font-semibold text-slate-900">{payment.user?.name || 'Unknown'}</p>
+                        <p className="text-slate-500">+{payment.user?.phone || 'No phone'}</p>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-slate-900">Rs. {payment.amount}</td>
+                      <td className="px-6 py-4 text-slate-500">{new Date(payment.createdAt).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => handleApprovePayment(payment._id)}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 shadow-sm"
+                        >
+                          Approve
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* REGISTERED USERS SECTION */}
         <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="text-lg font-bold" style={{ color: '#0f172a' }}>Registered Users</h2>
@@ -104,8 +212,6 @@ export default function Dashboard() {
 
           {loading ? (
             <div className="p-12 text-center text-slate-500">Loading users...</div>
-          ) : error ? (
-            <div className="p-6 text-center text-red-600">{error}</div>
           ) : users.length === 0 ? (
             <div className="p-12 text-center text-slate-500">No users found in the database.</div>
           ) : (
