@@ -5,8 +5,10 @@ type AuthContextType = {
   user: any;
   userToken: string | null;
   isLoading: boolean;
+  hasOnboarded: boolean;
   loginState: (token: string, userData: any) => Promise<void>;
   logout: () => Promise<void>;
+  completeOnboarding: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -14,30 +16,39 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [userToken, setUserToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
-  
+  const [hasOnboarded, setHasOnboarded] = useState(false);
+
   // Set default to true so it loads immediately on startup
   const [isLoading, setIsLoading] = useState(true);
 
-  const isLoggedIn = async () => {
+  const bootstrap = async () => {
     try {
       setIsLoading(true);
-      const token = await AsyncStorage.getItem('userToken');
-      const userData = await AsyncStorage.getItem('userInfo');
+
+      const [token, userData, onboarded] = await Promise.all([
+        AsyncStorage.getItem('userToken'),
+        AsyncStorage.getItem('userInfo'),
+        AsyncStorage.getItem('hasOnboarded'),
+      ]);
 
       if (token && userData) {
         setUserToken(token);
         setUser(JSON.parse(userData));
       }
+
+      if (onboarded === 'true') {
+        setHasOnboarded(true);
+      }
     } catch (e) {
       console.log('Error reading auth state', e);
     } finally {
       // Always stop loading after checking, whether a token exists or not
-      setIsLoading(false); 
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    isLoggedIn();
+    bootstrap();
   }, []);
 
   const loginState = async (token: string, userData: any) => {
@@ -54,8 +65,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await AsyncStorage.removeItem('userInfo');
   };
 
+  const completeOnboarding = async () => {
+    setHasOnboarded(true);
+    await AsyncStorage.setItem('hasOnboarded', 'true');
+  };
+
   return (
-    <AuthContext.Provider value={{ user, userToken, isLoading, loginState, logout }}>
+    <AuthContext.Provider
+      value={{ user, userToken, isLoading, hasOnboarded, loginState, logout, completeOnboarding }}
+    >
       {children}
     </AuthContext.Provider>
   );
