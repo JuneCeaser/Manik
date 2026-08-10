@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Modal,
   Pressable,
   ScrollView,
@@ -17,7 +18,37 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../constants/api';
 
-type ActiveModal = 'NONE' | 'CHANGE_NAME' | 'CHANGE_PASSWORD' | 'DELETE_ACCOUNT';
+type ActiveModal = 'NONE' | 'CHANGE_NAME' | 'CHANGE_PASSWORD' | 'DELETE_ACCOUNT' | 'ADD_WHATSAPP' | 'ADD_LOCATION';
+
+// Small, non-exhaustive list of country codes. Add more as needed.
+const COUNTRY_CODES = [
+  { code: '+94', country: 'Sri Lanka', flag: '🇱🇰' },
+  { code: '+91', country: 'India', flag: '🇮🇳' },
+  { code: '+971', country: 'UAE', flag: '🇦🇪' },
+  { code: '+966', country: 'Saudi Arabia', flag: '🇸🇦' },
+  { code: '+974', country: 'Qatar', flag: '🇶🇦' },
+  { code: '+965', country: 'Kuwait', flag: '🇰🇼' },
+  { code: '+44', country: 'United Kingdom', flag: '🇬🇧' },
+  { code: '+1', country: 'USA / Canada', flag: '🇺🇸' },
+  { code: '+61', country: 'Australia', flag: '🇦🇺' },
+  { code: '+65', country: 'Singapore', flag: '🇸🇬' },
+];
+
+// Province -> City options for the location dropdown. Keys must match the
+// backend's SRI_LANKA_PROVINCES list exactly.
+const PROVINCE_CITY_MAP: Record<string, string[]> = {
+  Western: ['Colombo', 'Dehiwala-Mount Lavinia', 'Moratuwa', 'Negombo', 'Gampaha', 'Kalutara', 'Panadura', 'Ja-Ela'],
+  Central: ['Kandy', 'Matale', 'Nuwara Eliya', 'Gampola', 'Nawalapitiya', 'Hatton'],
+  Southern: ['Galle', 'Matara', 'Hambantota', 'Tangalle', 'Weligama', 'Ambalangoda'],
+  Northern: ['Jaffna', 'Vavuniya', 'Mannar', 'Kilinochchi', 'Mullaitivu', 'Point Pedro'],
+  Eastern: ['Trincomalee', 'Batticaloa', 'Ampara', 'Kalmunai', 'Kattankudy'],
+  'North Western': ['Kurunegala', 'Puttalam', 'Chilaw', 'Wariyapola', 'Kuliyapitiya'],
+  'North Central': ['Anuradhapura', 'Polonnaruwa', 'Kekirawa', 'Medawachchiya'],
+  Uva: ['Badulla', 'Bandarawela', 'Moneragala', 'Wellawaya', 'Haputale'],
+  Sabaragamuwa: ['Ratnapura', 'Kegalle', 'Embilipitiya', 'Balangoda'],
+};
+
+const PROVINCES = Object.keys(PROVINCE_CITY_MAP);
 
 export default function ProfileScreen() {
   const { user, userToken, logout, loginState } = useAuth();
@@ -33,12 +64,40 @@ export default function ProfileScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
 
+  // WhatsApp form state
+  const [whatsappCode, setWhatsappCode] = useState('+94');
+  const [whatsappNumberInput, setWhatsappNumberInput] = useState('');
+  const [countryPickerVisible, setCountryPickerVisible] = useState(false);
+
+  // Location form state
+  const [selectedProvince, setSelectedProvince] = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
+  const [provincePickerVisible, setProvincePickerVisible] = useState(false);
+  const [cityPickerVisible, setCityPickerVisible] = useState(false);
+
   const closeModal = () => {
     setActiveModal('NONE');
     setStep('INPUT');
     setNewName('');
     setNewPassword('');
     setOtpCode('');
+    setCountryPickerVisible(false);
+    setProvincePickerVisible(false);
+    setCityPickerVisible(false);
+  };
+
+  const openWhatsappModal = () => {
+    // Prefill with existing values if the user already has one saved
+    setWhatsappCode((user as any)?.whatsappCountryCode || '+94');
+    setWhatsappNumberInput((user as any)?.whatsappNumber || '');
+    setActiveModal('ADD_WHATSAPP');
+  };
+
+  const openLocationModal = () => {
+    // Prefill with existing values if the user already has a location saved
+    setSelectedProvince((user as any)?.province || '');
+    setSelectedCity((user as any)?.city || '');
+    setActiveModal('ADD_LOCATION');
   };
 
   // --------------------------------------------------------------------------
@@ -160,6 +219,79 @@ export default function ProfileScreen() {
       }
     } catch {
       Alert.alert('Error', 'Failed to update name.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // ADD / UPDATE WHATSAPP NUMBER (No OTP)
+  // --------------------------------------------------------------------------
+  const handleUpdateWhatsapp = async () => {
+    const cleanNumber = whatsappNumberInput.replace(/\D/g, '');
+    if (!cleanNumber || cleanNumber.length < 6) {
+      return Alert.alert('Required', 'Please enter a valid WhatsApp number.');
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/whatsapp-number`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
+        body: JSON.stringify({ whatsappCountryCode: whatsappCode, whatsappNumber: cleanNumber }),
+      });
+      const data = await res.json();
+
+      if (res.status === 401) {
+        Alert.alert('Unauthorized', 'Your account no longer exists.');
+        logout();
+        return;
+      }
+
+      if (data.success) {
+        await loginState(userToken!, data.user);
+        Alert.alert('Success', 'WhatsApp number saved.');
+        closeModal();
+      } else {
+        Alert.alert('Error', data.message);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to save WhatsApp number.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // ADD / UPDATE LOCATION (No OTP)
+  // --------------------------------------------------------------------------
+  const handleUpdateLocation = async () => {
+    if (!selectedProvince || !selectedCity) {
+      return Alert.alert('Required', 'Please select both province and city.');
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/location`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
+        body: JSON.stringify({ province: selectedProvince, city: selectedCity }),
+      });
+      const data = await res.json();
+
+      if (res.status === 401) {
+        Alert.alert('Unauthorized', 'Your account no longer exists.');
+        logout();
+        return;
+      }
+
+      if (data.success) {
+        await loginState(userToken!, data.user);
+        Alert.alert('Success', 'Location saved.');
+        closeModal();
+      } else {
+        Alert.alert('Error', data.message);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to save location.');
     } finally {
       setLoading(false);
     }
@@ -306,6 +438,26 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </Pressable>
 
+          <Pressable style={styles.actionRow} onPress={openWhatsappModal}>
+            <Ionicons name="logo-whatsapp" size={20} color="#334155" />
+            <Text style={styles.actionText}>WhatsApp Number</Text>
+            <Text style={styles.actionValue}>
+              {(user as any)?.whatsappNumber
+                ? `${(user as any).whatsappCountryCode} ${(user as any).whatsappNumber}`
+                : 'Not set'}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </Pressable>
+
+          <Pressable style={styles.actionRow} onPress={openLocationModal}>
+            <Ionicons name="location-outline" size={20} color="#334155" />
+            <Text style={styles.actionText}>Location</Text>
+            <Text style={styles.actionValue}>
+              {(user as any)?.city ? `${(user as any).city}, ${(user as any).province}` : 'Not set'}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </Pressable>
+
           <Pressable style={[styles.actionRow, { borderBottomWidth: 0 }]} onPress={() => setActiveModal('DELETE_ACCOUNT')}>
             <Ionicons name="trash-outline" size={20} color="#EF4444" />
             <Text style={[styles.actionText, { color: '#EF4444' }]}>Delete Account</Text>
@@ -327,6 +479,8 @@ export default function ProfileScreen() {
                 {activeModal === 'CHANGE_NAME' && 'Change Name'}
                 {activeModal === 'CHANGE_PASSWORD' && 'Change Password'}
                 {activeModal === 'DELETE_ACCOUNT' && 'Delete Account'}
+                {activeModal === 'ADD_WHATSAPP' && 'WhatsApp Number'}
+                {activeModal === 'ADD_LOCATION' && 'Location'}
               </Text>
               <Pressable onPress={closeModal}>
                 <Ionicons name="close" size={24} color="#64748B" />
@@ -339,6 +493,64 @@ export default function ProfileScreen() {
                 <TextInput style={styles.input} placeholder="New Full Name" value={newName} onChangeText={setNewName} />
                 <Pressable style={styles.modalButton} onPress={handleChangeName} disabled={loading}>
                   {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Update Name</Text>}
+                </Pressable>
+              </>
+            )}
+
+            {/* ADD / UPDATE WHATSAPP NUMBER UI (No OTP) */}
+            {activeModal === 'ADD_WHATSAPP' && (
+              <>
+                <Text style={{ color: '#64748B', marginBottom: 16, fontSize: 14, lineHeight: 20 }}>
+                  This number is not verified — just used so buyers/sellers can reach you on WhatsApp.
+                </Text>
+                <View style={styles.phoneRow}>
+                  <Pressable style={styles.codeSelector} onPress={() => setCountryPickerVisible(true)}>
+                    <Text style={styles.codeSelectorText}>{whatsappCode}</Text>
+                    <Ionicons name="chevron-down" size={16} color="#334155" />
+                  </Pressable>
+                  <TextInput
+                    style={styles.phoneInput}
+                    placeholder="77 123 4567"
+                    keyboardType="phone-pad"
+                    value={whatsappNumberInput}
+                    onChangeText={setWhatsappNumberInput}
+                  />
+                </View>
+                <Pressable style={styles.modalButton} onPress={handleUpdateWhatsapp} disabled={loading}>
+                  {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Save Number</Text>}
+                </Pressable>
+              </>
+            )}
+
+            {/* ADD / UPDATE LOCATION UI (No OTP, Province -> City dropdowns) */}
+            {activeModal === 'ADD_LOCATION' && (
+              <>
+                <Text style={{ color: '#64748B', marginBottom: 16, fontSize: 14, lineHeight: 20 }}>
+                  Select your province and city so buyers/sellers know roughly where you are.
+                </Text>
+
+                <Text style={styles.fieldLabel}>Province</Text>
+                <Pressable style={styles.dropdownSelector} onPress={() => setProvincePickerVisible(true)}>
+                  <Text style={selectedProvince ? styles.dropdownSelectedText : styles.dropdownPlaceholderText}>
+                    {selectedProvince || 'Select Province'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color="#334155" />
+                </Pressable>
+
+                <Text style={styles.fieldLabel}>City</Text>
+                <Pressable
+                  style={[styles.dropdownSelector, !selectedProvince && styles.dropdownDisabled]}
+                  onPress={() => selectedProvince && setCityPickerVisible(true)}
+                  disabled={!selectedProvince}
+                >
+                  <Text style={selectedCity ? styles.dropdownSelectedText : styles.dropdownPlaceholderText}>
+                    {selectedCity || (selectedProvince ? 'Select City' : 'Select a province first')}
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color="#334155" />
+                </Pressable>
+
+                <Pressable style={[styles.modalButton, { marginTop: 8 }]} onPress={handleUpdateLocation} disabled={loading}>
+                  {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Save Location</Text>}
                 </Pressable>
               </>
             )}
@@ -395,6 +607,84 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* COUNTRY CODE PICKER (nested modal, only relevant to ADD_WHATSAPP) */}
+      <Modal visible={countryPickerVisible} animationType="fade" transparent>
+        <Pressable style={styles.modalOverlay} onPress={() => setCountryPickerVisible(false)}>
+          <View style={styles.pickerCard}>
+            <Text style={styles.modalTitle}>Select Country Code</Text>
+            <FlatList
+              data={COUNTRY_CODES}
+              keyExtractor={(item) => item.code + item.country}
+              style={{ marginTop: 12, maxHeight: 320 }}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={styles.countryRow}
+                  onPress={() => {
+                    setWhatsappCode(item.code);
+                    setCountryPickerVisible(false);
+                  }}
+                >
+                  <Text style={styles.countryFlag}>{item.flag}</Text>
+                  <Text style={styles.countryName}>{item.country}</Text>
+                  <Text style={styles.countryCode}>{item.code}</Text>
+                </Pressable>
+              )}
+            />
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* PROVINCE PICKER (nested modal, only relevant to ADD_LOCATION) */}
+      <Modal visible={provincePickerVisible} animationType="fade" transparent>
+        <Pressable style={styles.modalOverlay} onPress={() => setProvincePickerVisible(false)}>
+          <View style={styles.pickerCard}>
+            <Text style={styles.modalTitle}>Select Province</Text>
+            <FlatList
+              data={PROVINCES}
+              keyExtractor={(item) => item}
+              style={{ marginTop: 12, maxHeight: 320 }}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={styles.countryRow}
+                  onPress={() => {
+                    setSelectedProvince(item);
+                    setSelectedCity(''); // city list depends on province, so reset it
+                    setProvincePickerVisible(false);
+                  }}
+                >
+                  <Text style={styles.countryName}>{item}</Text>
+                </Pressable>
+              )}
+            />
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* CITY PICKER (nested modal, only relevant to ADD_LOCATION) */}
+      <Modal visible={cityPickerVisible} animationType="fade" transparent>
+        <Pressable style={styles.modalOverlay} onPress={() => setCityPickerVisible(false)}>
+          <View style={styles.pickerCard}>
+            <Text style={styles.modalTitle}>Select City</Text>
+            <FlatList
+              data={PROVINCE_CITY_MAP[selectedProvince] || []}
+              keyExtractor={(item) => item}
+              style={{ marginTop: 12, maxHeight: 320 }}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={styles.countryRow}
+                  onPress={() => {
+                    setSelectedCity(item);
+                    setCityPickerVisible(false);
+                  }}
+                >
+                  <Text style={styles.countryName}>{item}</Text>
+                </Pressable>
+              )}
+            />
+          </View>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -411,6 +701,7 @@ const styles = StyleSheet.create({
   userPhone: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 20 },
   actionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   actionText: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: '600', color: '#334155' },
+  actionValue: { fontSize: 13, color: '#94A3B8', marginRight: 6 },
   logoutButton: { backgroundColor: '#F1F5F9', padding: 16, borderRadius: 14, alignItems: 'center' },
   logoutText: { color: '#64748B', fontWeight: '700', fontSize: 15 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
@@ -420,4 +711,45 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 12, fontSize: 15, marginBottom: 16 },
   modalButton: { backgroundColor: '#2563EB', padding: 14, borderRadius: 12, alignItems: 'center' },
   buttonText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
+  phoneRow: { flexDirection: 'row', marginBottom: 16 },
+  codeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    marginRight: 8,
+    minWidth: 78,
+    justifyContent: 'space-between',
+  },
+  codeSelectorText: { fontSize: 15, fontWeight: '600', color: '#0F172A', marginRight: 4 },
+  phoneInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 15,
+  },
+  pickerCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, maxHeight: '70%' },
+  countryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  countryFlag: { fontSize: 20, marginRight: 10 },
+  countryName: { flex: 1, fontSize: 15, color: '#334155', fontWeight: '500' },
+  countryCode: { fontSize: 14, color: '#64748B', fontWeight: '600' },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#64748B', marginBottom: 6, marginTop: 4 },
+  dropdownSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    marginBottom: 16,
+  },
+  dropdownDisabled: { backgroundColor: '#F8FAFC' },
+  dropdownSelectedText: { fontSize: 15, color: '#0F172A', fontWeight: '600' },
+  dropdownPlaceholderText: { fontSize: 15, color: '#94A3B8' },
 });

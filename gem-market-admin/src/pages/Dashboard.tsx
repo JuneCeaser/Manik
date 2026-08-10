@@ -6,6 +6,10 @@ type User = {
   name: string;
   phone: string;
   profileImage?: string;
+  whatsappCountryCode?: string;
+  whatsappNumber?: string;
+  province?: string;
+  city?: string;
   createdAt: string;
 };
 
@@ -111,6 +115,8 @@ export default function Dashboard() {
                   <tr className="border-b border-slate-100 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
                     <th className="px-6 py-4">User</th>
                     <th className="px-6 py-4">Phone Number</th>
+                    <th className="px-6 py-4">WhatsApp</th>
+                    <th className="px-6 py-4">Location</th>
                     <th className="px-6 py-4">Joined Date</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
@@ -133,6 +139,16 @@ export default function Dashboard() {
                         <span className="font-semibold" style={{ color: '#0f172a' }}>{user.name}</span>
                       </td>
                       <td className="px-6 py-4 font-medium text-slate-600">+{user.phone}</td>
+                      <td className="px-6 py-4 text-slate-600">
+                        {user.whatsappNumber
+                          ? `${user.whatsappCountryCode} ${user.whatsappNumber}`
+                          : <span className="text-slate-400">—</span>}
+                      </td>
+                      <td className="px-6 py-4 text-slate-600">
+                        {user.city
+                          ? `${user.city}, ${user.province}`
+                          : <span className="text-slate-400">—</span>}
+                      </td>
                       <td className="px-6 py-4 text-slate-500">
                         {new Date(user.createdAt).toLocaleDateString()}
                       </td>

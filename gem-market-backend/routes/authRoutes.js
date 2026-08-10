@@ -15,6 +15,8 @@ const {
   verifyDeleteAccountOtp,
   getUserProfile,
   uploadProfileImage,
+  updateWhatsappNumber,
+  updateLocation,
 } = require('../controllers/authController');
 
 // Public routes
@@ -33,8 +35,10 @@ router.post('/delete-account/send-otp', protect, otpRateLimiter, sendDeleteAccou
 router.post('/delete-account/verify-otp', protect, verifyDeleteAccountOtp);
 
 // Direct Updates (No OTP Required)
-router.put('/change-name', protect, changeName); // <-- New clean route
+router.put('/change-name', protect, changeName);
 router.put('/profile-image', protect, uploadProfileImage);
+router.put('/whatsapp-number', protect, updateWhatsappNumber);
+router.put('/location', protect, updateLocation); // <-- new
 router.get('/profile', protect, getUserProfile);
 
 module.exports = router;

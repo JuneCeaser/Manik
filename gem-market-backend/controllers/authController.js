@@ -21,6 +21,19 @@ const formatForSms = (phone) => {
   return clean;
 };
 
+// Allowed provinces for the location dropdown (Sri Lanka's 9 provinces).
+const SRI_LANKA_PROVINCES = [
+  'Western',
+  'Central',
+  'Southern',
+  'Northern',
+  'Eastern',
+  'North Western',
+  'North Central',
+  'Uva',
+  'Sabaragamuwa',
+];
+
 // Configure ImageKit
 const imagekit = new ImageKit({
   publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
@@ -317,6 +330,100 @@ exports.changeName = async (req, res) => {
   }
 };
 
+// --------------------------------------------------------------------------
+// UPDATE WHATSAPP NUMBER (Protected Route - No OTP Required)
+// --------------------------------------------------------------------------
+exports.updateWhatsappNumber = async (req, res) => {
+  try {
+    const { whatsappCountryCode, whatsappNumber } = req.body;
+
+    if (!whatsappCountryCode || !whatsappNumber) {
+      return res.status(400).json({ success: false, message: 'Country code and WhatsApp number are required.' });
+    }
+
+    const cleanNumber = whatsappNumber.replace(/\D/g, '');
+    if (!/^\d{6,12}$/.test(cleanNumber)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid WhatsApp number.' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    user.whatsappCountryCode = whatsappCountryCode;
+    user.whatsappNumber = cleanNumber;
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'WhatsApp number updated successfully.',
+      user: {
+        id: user._id,
+        phone: user.phone,
+        name: user.name,
+        profileImage: user.profileImage,
+        whatsappCountryCode: user.whatsappCountryCode,
+        whatsappNumber: user.whatsappNumber,
+        province: user.province,
+        city: user.city,
+      },
+    });
+  } catch (err) {
+    console.error('updateWhatsappNumber error:', err);
+    return res.status(500).json({ success: false, message: 'Could not update WhatsApp number.' });
+  }
+};
+
+// --------------------------------------------------------------------------
+// UPDATE LOCATION (Protected Route - No OTP Required)
+// --------------------------------------------------------------------------
+exports.updateLocation = async (req, res) => {
+  try {
+    const { province, city } = req.body;
+
+    if (!province || !city) {
+      return res.status(400).json({ success: false, message: 'Province and city are required.' });
+    }
+
+    if (!SRI_LANKA_PROVINCES.includes(province)) {
+      return res.status(400).json({ success: false, message: 'Please select a valid province.' });
+    }
+
+    const cleanCity = city.trim();
+    if (cleanCity.length < 2 || cleanCity.length > 50) {
+      return res.status(400).json({ success: false, message: 'Please select a valid city.' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    user.province = province;
+    user.city = cleanCity;
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'Location updated successfully.',
+      user: {
+        id: user._id,
+        phone: user.phone,
+        name: user.name,
+        profileImage: user.profileImage,
+        whatsappCountryCode: user.whatsappCountryCode,
+        whatsappNumber: user.whatsappNumber,
+        province: user.province,
+        city: user.city,
+      },
+    });
+  } catch (err) {
+    console.error('updateLocation error:', err);
+    return res.status(500).json({ success: false, message: 'Could not update location.' });
+  }
+};
+
 // GET USER PROFILE (Protected Route)
 exports.getUserProfile = async (req, res) => {
   try {
@@ -326,7 +433,16 @@ exports.getUserProfile = async (req, res) => {
     }
     return res.json({
       success: true,
-      user: { id: user._id, phone: user.phone, name: user.name, profileImage: user.profileImage },
+      user: {
+        id: user._id,
+        phone: user.phone,
+        name: user.name,
+        profileImage: user.profileImage,
+        whatsappCountryCode: user.whatsappCountryCode,
+        whatsappNumber: user.whatsappNumber,
+        province: user.province,
+        city: user.city,
+      },
     });
   } catch (err) {
     console.error('getUserProfile error:', err);

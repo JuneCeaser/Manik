@@ -31,6 +31,22 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    whatsappCountryCode: {
+      type: String,
+      default: '',
+    },
+    whatsappNumber: {
+      type: String,
+      default: '',
+    },
+    province: {
+      type: String,
+      default: '',
+    },
+    city: {
+      type: String,
+      default: '',
+    },
   },
   { timestamps: true }
 );
