@@ -47,6 +47,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    // NEW FIELD: Tracks how many ads the user has paid to post
+    adCredits: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

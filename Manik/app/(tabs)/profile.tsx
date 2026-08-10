@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../constants/api';
 
@@ -52,6 +53,7 @@ const PROVINCES = Object.keys(PROVINCE_CITY_MAP);
 
 export default function ProfileScreen() {
   const { user, userToken, logout, loginState } = useAuth();
+  const router = useRouter(); // <-- Used to navigate to the subscription screen
 
   const [activeModal, setActiveModal] = useState<ActiveModal>('NONE');
   const [step, setStep] = useState<'INPUT' | 'OTP'>('INPUT');
@@ -87,27 +89,21 @@ export default function ProfileScreen() {
   };
 
   const openWhatsappModal = () => {
-    // Prefill with existing values if the user already has one saved
     setWhatsappCode((user as any)?.whatsappCountryCode || '+94');
     setWhatsappNumberInput((user as any)?.whatsappNumber || '');
     setActiveModal('ADD_WHATSAPP');
   };
 
   const openLocationModal = () => {
-    // Prefill with existing values if the user already has a location saved
     setSelectedProvince((user as any)?.province || '');
     setSelectedCity((user as any)?.city || '');
     setActiveModal('ADD_LOCATION');
   };
 
-  // --------------------------------------------------------------------------
-  // REFRESH & PROFILE STATUS CHECK (Handles Deleted Account Scenario)
-  // --------------------------------------------------------------------------
   const onRefresh = useCallback(async () => {
     if (!userToken) return;
     setRefreshing(true);
     try {
-      // Fetch latest profile state from backend to verify user still exists
       const res = await fetch(`${API_BASE_URL}/profile`, {
         method: 'GET',
         headers: {
@@ -118,7 +114,6 @@ export default function ProfileScreen() {
 
       const data = await res.json();
 
-      // If the account was deleted by admin or token is invalid (401)
       if (res.status === 401 || !data.success) {
         Alert.alert('Session Expired', 'Your account has been deleted or is no longer valid.');
         logout();
@@ -126,7 +121,6 @@ export default function ProfileScreen() {
       }
 
       if (data.user) {
-        // Sync context with latest data
         await loginState(userToken, data.user);
       }
     } catch {
@@ -136,7 +130,6 @@ export default function ProfileScreen() {
     }
   }, [userToken, logout, loginState]);
 
-  // Image Upload
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
@@ -190,9 +183,6 @@ export default function ProfileScreen() {
     }
   };
 
-  // --------------------------------------------------------------------------
-  // DIRECT NAME CHANGE (No OTP)
-  // --------------------------------------------------------------------------
   const handleChangeName = async () => {
     if (!newName.trim()) return Alert.alert('Required', 'Please enter a new name.');
     setLoading(true);
@@ -224,9 +214,6 @@ export default function ProfileScreen() {
     }
   };
 
-  // --------------------------------------------------------------------------
-  // ADD / UPDATE WHATSAPP NUMBER (No OTP)
-  // --------------------------------------------------------------------------
   const handleUpdateWhatsapp = async () => {
     const cleanNumber = whatsappNumberInput.replace(/\D/g, '');
     if (!cleanNumber || cleanNumber.length < 6) {
@@ -261,9 +248,6 @@ export default function ProfileScreen() {
     }
   };
 
-  // --------------------------------------------------------------------------
-  // ADD / UPDATE LOCATION (No OTP)
-  // --------------------------------------------------------------------------
   const handleUpdateLocation = async () => {
     if (!selectedProvince || !selectedCity) {
       return Alert.alert('Required', 'Please select both province and city.');
@@ -297,9 +281,6 @@ export default function ProfileScreen() {
     }
   };
 
-  // --------------------------------------------------------------------------
-  // CHANGE PASSWORD FLOW
-  // --------------------------------------------------------------------------
   const handleSendPasswordOtp = async () => {
     if (!newPassword || newPassword.length < 6) return Alert.alert('Error', 'New password must be at least 6 characters.');
     setLoading(true);
@@ -347,9 +328,6 @@ export default function ProfileScreen() {
     }
   };
 
-  // --------------------------------------------------------------------------
-  // DELETE ACCOUNT FLOW
-  // --------------------------------------------------------------------------
   const handleSendDeleteOtp = async () => {
     setLoading(true);
     try {
@@ -426,6 +404,16 @@ export default function ProfileScreen() {
           <Text style={styles.userName}>{user.name}</Text>
           <Text style={styles.userPhone}>+{user.phone}</Text>
 
+          {/* NEW SUBSCRIPTION ROW */}
+          <Pressable style={styles.actionRow} onPress={() => router.push('/subscription')}>
+            <Ionicons name="wallet-outline" size={20} color="#2563EB" />
+            <Text style={[styles.actionText, { color: '#2563EB' }]}>Ad Credits / Subscribe</Text>
+            <Text style={[styles.actionValue, { color: '#2563EB', fontWeight: '700' }]}>
+              {(user as any)?.adCredits || 0} left
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </Pressable>
+
           <Pressable style={styles.actionRow} onPress={() => setActiveModal('CHANGE_NAME')}>
             <Ionicons name="pencil-outline" size={20} color="#334155" />
             <Text style={styles.actionText}>Change Name</Text>
@@ -497,7 +485,7 @@ export default function ProfileScreen() {
               </>
             )}
 
-            {/* ADD / UPDATE WHATSAPP NUMBER UI (No OTP) */}
+            {/* ADD / UPDATE WHATSAPP NUMBER UI */}
             {activeModal === 'ADD_WHATSAPP' && (
               <>
                 <Text style={{ color: '#64748B', marginBottom: 16, fontSize: 14, lineHeight: 20 }}>
@@ -522,7 +510,7 @@ export default function ProfileScreen() {
               </>
             )}
 
-            {/* ADD / UPDATE LOCATION UI (No OTP, Province -> City dropdowns) */}
+            {/* ADD / UPDATE LOCATION UI */}
             {activeModal === 'ADD_LOCATION' && (
               <>
                 <Text style={{ color: '#64748B', marginBottom: 16, fontSize: 14, lineHeight: 20 }}>
@@ -608,7 +596,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* COUNTRY CODE PICKER (nested modal, only relevant to ADD_WHATSAPP) */}
+      {/* COUNTRY CODE PICKER */}
       <Modal visible={countryPickerVisible} animationType="fade" transparent>
         <Pressable style={styles.modalOverlay} onPress={() => setCountryPickerVisible(false)}>
           <View style={styles.pickerCard}>
@@ -635,7 +623,7 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
 
-      {/* PROVINCE PICKER (nested modal, only relevant to ADD_LOCATION) */}
+      {/* PROVINCE PICKER */}
       <Modal visible={provincePickerVisible} animationType="fade" transparent>
         <Pressable style={styles.modalOverlay} onPress={() => setProvincePickerVisible(false)}>
           <View style={styles.pickerCard}>
@@ -649,7 +637,7 @@ export default function ProfileScreen() {
                   style={styles.countryRow}
                   onPress={() => {
                     setSelectedProvince(item);
-                    setSelectedCity(''); // city list depends on province, so reset it
+                    setSelectedCity(''); 
                     setProvincePickerVisible(false);
                   }}
                 >
@@ -661,7 +649,7 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
 
-      {/* CITY PICKER (nested modal, only relevant to ADD_LOCATION) */}
+      {/* CITY PICKER */}
       <Modal visible={cityPickerVisible} animationType="fade" transparent>
         <Pressable style={styles.modalOverlay} onPress={() => setCityPickerVisible(false)}>
           <View style={styles.pickerCard}>

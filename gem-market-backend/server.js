@@ -4,6 +4,7 @@ const cors = require('cors');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 const app = express();
 
@@ -17,7 +18,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
-
+app.use('/api/payments', paymentRoutes);
 app.get('/', (req, res) => res.json({ status: 'Gem Market backend running' }));
 
 const PORT = process.env.PORT || 5000;

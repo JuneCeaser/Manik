@@ -3,7 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-// Custom Tab Icon component to match your design perfectly
+// Custom Tab Icon component
 const TabIcon = ({ name, focused, isAdd = false }: { name: any, focused: boolean, isAdd?: boolean }) => {
   return (
     <View style={styles.iconContainer}>
@@ -24,7 +24,7 @@ const TabIcon = ({ name, focused, isAdd = false }: { name: any, focused: boolean
         />
       )}
       
-      {/* The Active Blue Dot */}
+      {/* Active Blue Dot */}
       {focused && <View style={styles.activeDot} />}
     </View>
   );
@@ -35,15 +35,15 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: false, // Hides the text labels
+        tabBarShowLabel: false,
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           borderTopWidth: 1,
           borderTopColor: '#F1F5F9',
-          height: 85, // Taller to match the spacious design
+          height: 85,
           paddingTop: 10,
-          elevation: 0, // Removes Android shadow for a cleaner look
-          shadowOpacity: 0, // Removes iOS shadow
+          elevation: 0,
+          shadowOpacity: 0,
         },
       }}
     >
@@ -77,6 +77,14 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => <TabIcon name="person" focused={focused} />,
         }}
       />
+
+      {/* HIDDEN TAB: Subscription Page */}
+      <Tabs.Screen
+        name="subscription"
+        options={{
+          href: null, // Hides this screen completely from the bottom tab bar
+        }}
+      />
     </Tabs>
   );
 }
@@ -100,6 +108,6 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
     backgroundColor: '#2563EB',
     position: 'absolute',
-    bottom: -8, // Pushes the dot just underneath the icon
+    bottom: -8,
   },
 });
