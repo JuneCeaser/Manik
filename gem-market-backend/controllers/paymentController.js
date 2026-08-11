@@ -1,3 +1,6 @@
+
+//paymentController.js
+
 const Payment = require('../models/Payment');
 const ImageKit = require('imagekit');
 

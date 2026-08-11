@@ -1,3 +1,5 @@
+//gemAdController.js
+
 const GemAd = require('../models/GemAd');
 const User = require('../models/User');
 const ImageKit = require('imagekit');

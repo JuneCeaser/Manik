@@ -1,3 +1,6 @@
+
+//notificationController.js
+
 const Notification = require('../models/Notification');
 
 // @desc    Get logged in user's notifications

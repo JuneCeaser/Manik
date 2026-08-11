@@ -1,3 +1,5 @@
+//adminController.js
+
 const Admin = require('../models/Admin');
 const User = require('../models/User');
 const Payment = require('../models/Payment');

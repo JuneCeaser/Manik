@@ -1,3 +1,5 @@
+//otpRateLimiter.js
+
 const rateLimit = require('express-rate-limit');
 
 // Every OTP send costs real money, so this limits how often the same
