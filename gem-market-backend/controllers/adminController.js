@@ -1,8 +1,10 @@
 const Admin = require('../models/Admin');
 const User = require('../models/User');
 const Payment = require('../models/Payment');
+const Notification = require('../models/Notification');
 const bcrypt = require('bcryptjs');
 const generateToken = require('../utils/generateToken');
+const sendSms = require('../utils/sendSms');
 const ImageKit = require('imagekit');
 
 const imagekit = new ImageKit({
@@ -10,6 +12,16 @@ const imagekit = new ImageKit({
   privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
   urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
 });
+
+// Helper to format old numbers (e.g., 077...) to international for Text.lk
+// without breaking new numbers that already have country codes.
+const formatForSms = (phone) => {
+  let clean = phone.replace(/\D/g, '');
+  if (phone.startsWith('0')) {
+    return `94${clean.substring(1)}`;
+  }
+  return clean;
+};
 
 // --------------------------------------------------------------------------
 // ADMIN AUTHENTICATION
@@ -121,6 +133,30 @@ exports.approvePayment = async (req, res) => {
     if (user) {
       user.adCredits += payment.adCreditsAdded;
       await user.save();
+
+      // Create in-app notification for the user's notifications page
+      try {
+        await Notification.create({
+          user: user._id,
+          title: 'Payment Approved',
+          message: `Your payment of Rs. ${payment.amount} has been approved. ${payment.adCreditsAdded} Ad Credits have been added to your account.`,
+          type: 'PAYMENT_APPROVED',
+          relatedPaymentId: payment._id,
+        });
+      } catch (notifError) {
+        console.error('Failed to create notification:', notifError);
+      }
+
+      // Send SMS to the user's registered phone number
+      try {
+        const smsPhone = formatForSms(user.phone);
+        await sendSms(
+          smsPhone,
+          `Your Manik payment of Rs. ${payment.amount} has been approved. ${payment.adCreditsAdded} Ad Credits have been added to your account.`
+        );
+      } catch (smsError) {
+        console.error('Failed to send SMS notification:', smsError);
+      }
     }
 
     return res.json({ success: true, message: 'Payment approved and credits added.' });
