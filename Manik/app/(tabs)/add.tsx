@@ -44,6 +44,13 @@ type PickerKey =
   | 'city'
   | 'none';
 
+type AppImage = {
+  url: string;
+  fileId: string;
+  isNew?: boolean;
+  base64?: string;
+};
+
 // Reusable option-list modal used for every dropdown on this screen
 const SelectModal = ({
   visible,
@@ -115,17 +122,16 @@ export default function AddScreen() {
   const { user, userToken, logout } = useAuth();
   const router = useRouter();
   const { editId } = useLocalSearchParams<{ editId?: string }>();
-  const isEditMode = !!editId;
+  
+  const isEditMode = !!editId && editId !== '';
 
   const [activePicker, setActivePicker] = useState<PickerKey>('none');
   const [submitting, setSubmitting] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEditMode);
 
-  // Images - each entry is either an existing https:// URL (kept from the
-  // ad) or a newly picked data:image/...;base64 string.
-  const [images, setImages] = useState<string[]>([]);
-  const [originalImageUrls, setOriginalImageUrls] = useState<string[]>([]);
-  const [certificateImage, setCertificateImage] = useState<string | null>(null);
+  // Updated Image State tracking fileId references for direct client uploads
+  const [images, setImages] = useState<AppImage[]>([]);
+  const [certificateImage, setCertificateImage] = useState<AppImage | null>(null);
   const [originalCertificateUrl, setOriginalCertificateUrl] = useState<string | null>(null);
 
   // Core details
@@ -155,7 +161,10 @@ export default function AddScreen() {
 
   // Load existing ad data when editing
   useEffect(() => {
-    if (!isEditMode) return;
+    if (!isEditMode) {
+      setInitialLoading(false);
+      return;
+    }
 
     const loadAd = async () => {
       try {
@@ -197,12 +206,10 @@ export default function AddScreen() {
         setLabName(ad.certification?.labName || '');
         setDescription(ad.description || '');
 
-        const urls = ad.images.map((img: any) => img.url);
-        setImages(urls);
-        setOriginalImageUrls(urls);
+        setImages(ad.images.map((img: any) => ({ url: img.url, fileId: img.fileId, isNew: false })));
 
         if (ad.certificateImage) {
-          setCertificateImage(ad.certificateImage.url);
+          setCertificateImage({ url: ad.certificateImage.url, fileId: ad.certificateImage.fileId, isNew: false });
           setOriginalCertificateUrl(ad.certificateImage.url);
         }
 
@@ -219,8 +226,7 @@ export default function AddScreen() {
     };
 
     loadAd();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editId]);
+  }, [editId, isEditMode]);
 
   const pickImages = async () => {
     if (images.length >= 5) {
@@ -242,9 +248,14 @@ export default function AddScreen() {
     });
 
     if (!result.canceled) {
-      const newImages = result.assets
+      const newImages: AppImage[] = result.assets
         .filter((a) => a.base64)
-        .map((a) => `data:image/jpeg;base64,${a.base64}`);
+        .map((a) => ({
+          url: a.uri,
+          fileId: '',
+          isNew: true,
+          base64: `data:image/jpeg;base64,${a.base64}`,
+        }));
       setImages((prev) => [...prev, ...newImages].slice(0, 5));
     }
   };
@@ -267,7 +278,12 @@ export default function AddScreen() {
     });
 
     if (!result.canceled && result.assets[0].base64) {
-      setCertificateImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      setCertificateImage({
+        url: result.assets[0].uri,
+        fileId: '',
+        isNew: true,
+        base64: `data:image/jpeg;base64,${result.assets[0].base64}`,
+      });
     }
   };
 
@@ -317,45 +333,83 @@ export default function AddScreen() {
       return;
     }
 
-    const finalColor = color === 'Other' ? customColor.trim() : color;
-
-    const payload: any = {
-      title: title.trim(),
-      category,
-      price: {
-        amount: Number(priceAmount),
-        currency,
-        negotiable,
-      },
-      weightCarats: Number(weightCarats),
-      color: finalColor,
-      shape,
-      treatment,
-      certification: {
-        status: certificationStatus,
-        labName: certificationStatus === 'Certified' ? labName : '',
-      },
-      description: description.trim(),
-      province,
-      city,
-      contactPhone: hidePhoneNumber ? '' : contactPhone.trim(),
-      hidePhoneNumber,
-    };
-
-    // Only send images/certificate if they actually changed (edit mode) or
-    // always (create mode, where they're required/optional respectively).
-    const imagesChanged = JSON.stringify(images) !== JSON.stringify(originalImageUrls);
-    if (!isEditMode || imagesChanged) {
-      payload.images = images;
-    }
-
-    const certChanged = certificateImage !== originalCertificateUrl;
-    if ((!isEditMode && certificateImage) || (isEditMode && certChanged && certificateImage)) {
-      payload.certificateImage = certificateImage;
-    }
-
     setSubmitting(true);
     try {
+      // 1. Fetch Secure Upload Signature from backend
+      const authRes = await fetch(`${GEMS_URL}/imagekit-auth`, {
+        headers: { Authorization: `Bearer ${userToken}` },
+      });
+      const authData = await authRes.json();
+
+      if (!authData.success) {
+        setSubmitting(false);
+        return Alert.alert('Server Error', 'Failed to connect to image provider auth.');
+      }
+
+      // Reusable direct-upload function straight to ImageKit CDN
+      const uploadToImageKit = async (base64Str: string, folder: string) => {
+        const formData = new FormData();
+        formData.append('file', base64Str);
+        formData.append('publicKey', authData.publicKey);
+        formData.append('signature', authData.signature);
+        formData.append('expire', String(authData.expire));
+        formData.append('token', authData.token);
+        formData.append('fileName', `gem_${Date.now()}.jpg`);
+        formData.append('folder', folder);
+
+        const res = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Image upload failed');
+        return await res.json();
+      };
+
+      // 2. Upload Only New Images directly
+      const finalImages = [];
+      for (const img of images) {
+        if (img.isNew && img.base64) {
+          const uploaded = await uploadToImageKit(img.base64, '/gem_ads');
+          finalImages.push({ url: uploaded.url, fileId: uploaded.fileId });
+        } else {
+          finalImages.push({ url: img.url, fileId: img.fileId });
+        }
+      }
+
+      // 3. Upload New Certificate (if modified)
+      let finalCertificate = certificateImage && !certificateImage.isNew ? { url: certificateImage.url, fileId: certificateImage.fileId } : null;
+      if (certificateImage && certificateImage.isNew && certificateImage.base64) {
+        const uploaded = await uploadToImageKit(certificateImage.base64, '/gem_certificates');
+        finalCertificate = { url: uploaded.url, fileId: uploaded.fileId };
+      }
+
+      const finalColor = color === 'Other' ? customColor.trim() : color;
+
+      const payload: any = {
+        title: title.trim(),
+        category,
+        price: {
+          amount: Number(priceAmount),
+          currency,
+          negotiable,
+        },
+        weightCarats: Number(weightCarats),
+        color: finalColor,
+        shape,
+        treatment,
+        certification: {
+          status: certificationStatus,
+          labName: certificationStatus === 'Certified' ? labName : '',
+        },
+        description: description.trim(),
+        province,
+        city,
+        contactPhone: hidePhoneNumber ? '' : contactPhone.trim(),
+        hidePhoneNumber,
+        images: finalImages,
+      };
+
+      if (finalCertificate || (isEditMode && certificateImage === null)) {
+        payload.certificateImage = finalCertificate;
+      }
+
       const url = isEditMode ? `${GEMS_URL}/${editId}` : GEMS_URL;
       const method = isEditMode ? 'PUT' : 'POST';
 
@@ -396,7 +450,8 @@ export default function AddScreen() {
             : 'Your gem has been submitted for admin approval.'
         );
         resetForm();
-        router.push('/my-ads');
+        router.setParams({ editId: '' });
+        router.push('../my-ads');
       } else {
         Alert.alert('Submission Failed', data.message || 'Something went wrong.');
       }
@@ -428,7 +483,11 @@ export default function AddScreen() {
         <View style={styles.headerRow}>
           <Text style={styles.headerTitle}>{isEditMode ? 'Edit Gem' : 'Add New Gem'}</Text>
           {isEditMode && (
-            <Pressable onPress={() => router.back()}>
+            <Pressable onPress={() => {
+              resetForm();
+              router.setParams({ editId: '' });
+              router.back();
+            }}>
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
           )}
@@ -439,9 +498,9 @@ export default function AddScreen() {
           <Text style={styles.sectionTitle}>Photos ({images.length}/5)</Text>
           <Text style={styles.sectionHint}>Add at least 1 photo. Top, bottom, and side angles help buyers most.</Text>
           <View style={styles.imagesRow}>
-            {images.map((uri, index) => (
+            {images.map((img, index) => (
               <View key={index} style={styles.imageThumbWrapper}>
-                <Image source={{ uri }} style={styles.imageThumb} />
+                <Image source={{ uri: img.url }} style={styles.imageThumb} />
                 <Pressable style={styles.removeImageButton} onPress={() => removeImage(index)}>
                   <Ionicons name="close" size={14} color="#FFF" />
                 </Pressable>
@@ -461,7 +520,7 @@ export default function AddScreen() {
           <Text style={styles.sectionTitle}>Gemological Certificate (Optional)</Text>
           <Pressable style={styles.certUploadBox} onPress={pickCertificateImage}>
             {certificateImage ? (
-              <Image source={{ uri: certificateImage }} style={styles.certPreviewImage} />
+              <Image source={{ uri: certificateImage.url }} style={styles.certPreviewImage} />
             ) : (
               <>
                 <Ionicons name="ribbon-outline" size={32} color="#94A3B8" />
@@ -469,8 +528,8 @@ export default function AddScreen() {
               </>
             )}
           </Pressable>
-          {certificateImage && (!isEditMode || certificateImage !== originalCertificateUrl) && (
-            <Pressable onPress={() => setCertificateImage(isEditMode ? originalCertificateUrl : null)}>
+          {certificateImage && (!isEditMode || certificateImage.url !== originalCertificateUrl) && (
+            <Pressable onPress={() => setCertificateImage(isEditMode && originalCertificateUrl ? { url: originalCertificateUrl, fileId: '', isNew: false } : null)}>
               <Text style={styles.removeCertText}>
                 {isEditMode ? 'Undo new certificate' : 'Remove certificate'}
               </Text>
@@ -544,7 +603,7 @@ export default function AddScreen() {
             <View style={styles.creditsEstimateBox}>
               <Ionicons name="information-circle-outline" size={18} color="#2563EB" />
               <Text style={styles.creditsEstimateText}>
-                Editing doesnt use any ad credits, but the ad will need admin approval again before its visible.
+                Editing doesn t use any ad credits, but the ad will need admin approval again before its visible.
               </Text>
             </View>
           )}

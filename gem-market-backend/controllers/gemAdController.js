@@ -1,5 +1,3 @@
-//gemAdController.js
-
 const GemAd = require('../models/GemAd');
 const User = require('../models/User');
 const ImageKit = require('imagekit');
@@ -10,14 +8,8 @@ const imagekit = new ImageKit({
   urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
 });
 
-// Rough USD -> LKR rate used ONLY to decide which credit tier a USD-priced ad
-// falls into. Update this in your .env as exchange rates move; it does not
-// affect the price actually shown/stored for the ad.
 const USD_TO_LKR_RATE = Number(process.env.USD_TO_LKR_RATE) || 300;
 
-// --------------------------------------------------------------------------
-// CREDIT TIER LOGIC
-// --------------------------------------------------------------------------
 const getRequiredCredits = (amount, currency) => {
   const lkrAmount = currency === 'USD' ? amount * USD_TO_LKR_RATE : amount;
   if (lkrAmount < 10000) return 1;
@@ -26,95 +18,56 @@ const getRequiredCredits = (amount, currency) => {
 };
 
 // --------------------------------------------------------------------------
+// IMAGEKIT DIRECT UPLOAD AUTHENTICATION
+// --------------------------------------------------------------------------
+exports.getImageKitAuth = (req, res) => {
+  try {
+    const authParams = imagekit.getAuthenticationParameters();
+    return res.json({
+      success: true,
+      ...authParams,
+      publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+    });
+  } catch (err) {
+    console.error('getImageKitAuth error:', err);
+    return res.status(500).json({ success: false, message: 'Could not generate upload signature.' });
+  }
+};
+
+// --------------------------------------------------------------------------
 // CREATE AD
 // --------------------------------------------------------------------------
 exports.createGemAd = async (req, res) => {
   try {
     const {
-      title,
-      category,
-      price,
-      weightCarats,
-      color,
-      shape,
-      treatment,
-      certification,
-      description,
-      images,
-      certificateImage,
-      province,
-      city,
-      contactPhone,
-      hidePhoneNumber,
+      title, category, price, weightCarats, color, shape, treatment,
+      certification, description, images, certificateImage, province, city,
+      contactPhone, hidePhoneNumber,
     } = req.body;
 
-    if (!title || !category || !price || !price.amount || !price.currency) {
-      return res.status(400).json({ success: false, message: 'Title, category, and price are required.' });
-    }
-    if (!weightCarats || !color || !shape || !treatment) {
-      return res.status(400).json({ success: false, message: 'Weight, color, shape, and treatment are required.' });
-    }
-    if (!province || !city) {
-      return res.status(400).json({ success: false, message: 'Location is required.' });
-    }
+    // Validate the arrays uploaded directly from the frontend
     if (!Array.isArray(images) || images.length < 1 || images.length > 5) {
-      return res.status(400).json({ success: false, message: 'Please upload between 1 and 5 images.' });
-    }
-    if (certification && certification.status === 'Certified' && !certification.labName) {
-      return res.status(400).json({ success: false, message: 'Please provide the certifying lab name.' });
-    }
-    if (!hidePhoneNumber && !contactPhone) {
-      return res.status(400).json({ success: false, message: 'Please provide a contact number or hide it.' });
+      return res.status(400).json({ success: false, message: 'Please provide between 1 and 5 images.' });
     }
 
     const requiredCredits = getRequiredCredits(Number(price.amount), price.currency);
-
     const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found.' });
-    }
+
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
 
     if (user.adCredits < requiredCredits) {
       return res.status(402).json({
         success: false,
         code: 'INSUFFICIENT_CREDITS',
         message: `You need ${requiredCredits} ad credit(s) to post this ad. You currently have ${user.adCredits}.`,
-        requiredCredits,
-        availableCredits: user.adCredits,
       });
-    }
-
-    // Upload gem images to ImageKit
-    const uploadedImages = [];
-    for (let i = 0; i < images.length; i++) {
-      const uploadResponse = await imagekit.upload({
-        file: images[i],
-        fileName: `gem_${req.user._id}_${Date.now()}_${i}.jpg`,
-        folder: '/gem_ads',
-      });
-      uploadedImages.push({ url: uploadResponse.url, fileId: uploadResponse.fileId });
-    }
-
-    // Upload certificate image if provided
-    let uploadedCertificate = null;
-    if (certificateImage) {
-      const certUploadResponse = await imagekit.upload({
-        file: certificateImage,
-        fileName: `cert_${req.user._id}_${Date.now()}.jpg`,
-        folder: '/gem_certificates',
-      });
-      uploadedCertificate = { url: certUploadResponse.url, fileId: certUploadResponse.fileId };
     }
 
     const gemAd = await GemAd.create({
       user: req.user._id,
       title: title.trim(),
       category,
-      price: {
-        amount: Number(price.amount),
-        currency: price.currency,
-        negotiable: !!price.negotiable,
-      },
+      price: { amount: Number(price.amount), currency: price.currency, negotiable: !!price.negotiable },
       weightCarats: Number(weightCarats),
       color,
       shape,
@@ -124,8 +77,8 @@ exports.createGemAd = async (req, res) => {
         labName: certification?.status === 'Certified' ? certification.labName : '',
       },
       description: description || '',
-      images: uploadedImages,
-      certificateImage: uploadedCertificate,
+      images: images, // Contains [{ url, fileId }]
+      certificateImage: certificateImage || null,
       location: { province, city },
       contactPhone: hidePhoneNumber ? '' : contactPhone,
       hidePhoneNumber: !!hidePhoneNumber,
@@ -133,7 +86,6 @@ exports.createGemAd = async (req, res) => {
       creditsUsed: requiredCredits,
     });
 
-    // Deduct credits only after the ad is successfully created
     user.adCredits -= requiredCredits;
     await user.save();
 
@@ -141,7 +93,6 @@ exports.createGemAd = async (req, res) => {
       success: true,
       message: 'Ad submitted successfully. Pending admin approval.',
       gemAd,
-      remainingCredits: user.adCredits,
     });
   } catch (err) {
     console.error('createGemAd error:', err);
@@ -163,14 +114,12 @@ exports.getMyGemAds = async (req, res) => {
 };
 
 // --------------------------------------------------------------------------
-// GET SINGLE AD (owner only - used to load the edit form)
+// GET SINGLE AD
 // --------------------------------------------------------------------------
 exports.getGemAdById = async (req, res) => {
   try {
     const gemAd = await GemAd.findOne({ _id: req.params.id, user: req.user._id });
-    if (!gemAd) {
-      return res.status(404).json({ success: false, message: 'Ad not found.' });
-    }
+    if (!gemAd) return res.status(404).json({ success: false, message: 'Ad not found.' });
     return res.json({ success: true, gemAd });
   } catch (err) {
     console.error('getGemAdById error:', err);
@@ -179,7 +128,7 @@ exports.getGemAdById = async (req, res) => {
 };
 
 // --------------------------------------------------------------------------
-// GET PUBLISHED ADS (public home feed - newest first)
+// GET PUBLISHED ADS (For Home Screen Feed)
 // --------------------------------------------------------------------------
 exports.getPublishedGemAds = async (req, res) => {
   try {
@@ -195,41 +144,39 @@ exports.getPublishedGemAds = async (req, res) => {
 };
 
 // --------------------------------------------------------------------------
-// EDIT AD (no credit charge - goes back to PENDING for re-approval)
+// GET PUBLIC GEM AD DETAILS 
+// --------------------------------------------------------------------------
+exports.getPublicGemAdById = async (req, res) => {
+  try {
+    const gemAd = await GemAd.findOne({ _id: req.params.id, status: 'APPROVED' })
+      .populate('user', 'name profileImage whatsappCountryCode whatsappNumber phone');
+
+    if (!gemAd) return res.status(404).json({ success: false, message: 'Gem ad not found.' });
+    return res.json({ success: true, gemAd });
+  } catch (err) {
+    console.error('getPublicGemAdById error:', err);
+    return res.status(500).json({ success: false, message: 'Could not fetch ad details.' });
+  }
+};
+
+// --------------------------------------------------------------------------
+// EDIT AD
 // --------------------------------------------------------------------------
 exports.updateGemAd = async (req, res) => {
   try {
     const gemAd = await GemAd.findOne({ _id: req.params.id, user: req.user._id });
-    if (!gemAd) {
-      return res.status(404).json({ success: false, message: 'Ad not found.' });
-    }
+    if (!gemAd) return res.status(404).json({ success: false, message: 'Ad not found.' });
 
     const {
-      title,
-      category,
-      price,
-      weightCarats,
-      color,
-      shape,
-      treatment,
-      certification,
-      description,
-      images,
-      certificateImage,
-      province,
-      city,
-      contactPhone,
-      hidePhoneNumber,
+      title, category, price, weightCarats, color, shape, treatment,
+      certification, description, images, certificateImage, province, city,
+      contactPhone, hidePhoneNumber,
     } = req.body;
 
     if (title) gemAd.title = title.trim();
     if (category) gemAd.category = category;
-    if (price && price.amount && price.currency) {
-      gemAd.price = {
-        amount: Number(price.amount),
-        currency: price.currency,
-        negotiable: !!price.negotiable,
-      };
+    if (price && price.amount) {
+      gemAd.price = { amount: Number(price.amount), currency: price.currency, negotiable: !!price.negotiable };
     }
     if (weightCarats) gemAd.weightCarats = Number(weightCarats);
     if (color) gemAd.color = color;
@@ -246,52 +193,33 @@ exports.updateGemAd = async (req, res) => {
     if (hidePhoneNumber !== undefined) gemAd.hidePhoneNumber = !!hidePhoneNumber;
     if (contactPhone !== undefined) gemAd.contactPhone = hidePhoneNumber ? '' : contactPhone;
 
-    // Replace images only if a new full set was submitted
+    // Handle image updates and cleanup obsolete images from ImageKit
     if (Array.isArray(images) && images.length > 0) {
-      if (images.length > 5) {
-        return res.status(400).json({ success: false, message: 'Please upload a maximum of 5 images.' });
-      }
-
+      const newFileIds = images.map(img => img.fileId);
       for (const oldImage of gemAd.images) {
-        try {
-          await imagekit.deleteFile(oldImage.fileId);
-        } catch (imgError) {
-          console.error('Failed to delete old gem image:', imgError);
+        if (oldImage.fileId && !newFileIds.includes(oldImage.fileId)) {
+          try {
+            await imagekit.deleteFile(oldImage.fileId);
+          } catch (err) { 
+            console.error('Failed to delete old gem image from ImageKit:', err); 
+          }
         }
       }
-
-      const uploadedImages = [];
-      for (let i = 0; i < images.length; i++) {
-        const uploadResponse = await imagekit.upload({
-          file: images[i],
-          fileName: `gem_${req.user._id}_${Date.now()}_${i}.jpg`,
-          folder: '/gem_ads',
-        });
-        uploadedImages.push({ url: uploadResponse.url, fileId: uploadResponse.fileId });
-      }
-      gemAd.images = uploadedImages;
+      gemAd.images = images;
     }
 
-    // Replace certificate image only if a new one was submitted
-    if (certificateImage) {
-      if (gemAd.certificateImage) {
+    if (certificateImage !== undefined) {
+      if (gemAd.certificateImage && gemAd.certificateImage.fileId && (!certificateImage || certificateImage.fileId !== gemAd.certificateImage.fileId)) {
         try {
           await imagekit.deleteFile(gemAd.certificateImage.fileId);
-        } catch (imgError) {
-          console.error('Failed to delete old certificate image:', imgError);
+        } catch (err) { 
+          console.error('Failed to delete old certificate image from ImageKit:', err); 
         }
       }
-      const certUploadResponse = await imagekit.upload({
-        file: certificateImage,
-        fileName: `cert_${req.user._id}_${Date.now()}.jpg`,
-        folder: '/gem_certificates',
-      });
-      gemAd.certificateImage = { url: certUploadResponse.url, fileId: certUploadResponse.fileId };
+      gemAd.certificateImage = certificateImage || null;
     }
 
-    // Any edit sends the ad back for admin approval - no credit charge
-    gemAd.status = 'PENDING';
-
+    gemAd.status = 'PENDING'; // Resets to pending for admin re-evaluation upon update
     await gemAd.save();
 
     return res.json({ success: true, message: 'Ad updated and resubmitted for approval.', gemAd });
@@ -302,34 +230,30 @@ exports.updateGemAd = async (req, res) => {
 };
 
 // --------------------------------------------------------------------------
-// DELETE AD (no credit refund)
+// DELETE AD 
 // --------------------------------------------------------------------------
 exports.deleteGemAd = async (req, res) => {
   try {
     const gemAd = await GemAd.findOne({ _id: req.params.id, user: req.user._id });
-    if (!gemAd) {
-      return res.status(404).json({ success: false, message: 'Ad not found.' });
-    }
+    if (!gemAd) return res.status(404).json({ success: false, message: 'Ad not found.' });
 
     for (const image of gemAd.images) {
-      try {
-        await imagekit.deleteFile(image.fileId);
-      } catch (imgError) {
-        console.error('Failed to delete gem image:', imgError);
+      if (image.fileId) {
+        try {
+          await imagekit.deleteFile(image.fileId);
+        } catch (err) { console.error('Failed to delete gem image from ImageKit:', err); }
       }
     }
 
-    if (gemAd.certificateImage) {
+    if (gemAd.certificateImage && gemAd.certificateImage.fileId) {
       try {
         await imagekit.deleteFile(gemAd.certificateImage.fileId);
-      } catch (imgError) {
-        console.error('Failed to delete certificate image:', imgError);
-      }
+      } catch (err) { console.error('Failed to delete certificate image from ImageKit:', err); }
     }
 
     await GemAd.findByIdAndDelete(gemAd._id);
 
-    return res.json({ success: true, message: 'Ad deleted. Credits are not refunded for deleted ads.' });
+    return res.json({ success: true, message: 'Ad deleted.' });
   } catch (err) {
     console.error('deleteGemAd error:', err);
     return res.status(500).json({ success: false, message: 'Could not delete ad.' });
