@@ -1,5 +1,3 @@
-//adminController.js
-
 const Admin = require('../models/Admin');
 const User = require('../models/User');
 const Payment = require('../models/Payment');
@@ -185,7 +183,9 @@ exports.getPendingGemAds = async (req, res) => {
 
 exports.approveGemAd = async (req, res) => {
   try {
-    const gemAd = await GemAd.findById(req.params.id);
+    // 1. Add .populate('user') so we can access the user's phone number
+    const gemAd = await GemAd.findById(req.params.id).populate('user');
+    
     if (!gemAd) {
       return res.status(404).json({ success: false, message: 'Ad not found.' });
     }
@@ -193,13 +193,14 @@ exports.approveGemAd = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Ad already approved.' });
     }
 
+    // 2. Mark as approved
     gemAd.status = 'APPROVED';
     await gemAd.save();
 
-    // In-app notification only - no SMS, no push, as requested
+    // 3. Create In-App Notification
     try {
       await Notification.create({
-        user: gemAd.user,
+        user: gemAd.user._id, // ._id is needed here because user is now populated
         title: 'Ad Approved',
         message: `Your ad "${gemAd.title}" has been approved and is now live on Manik.`,
         type: 'AD_APPROVED',
@@ -209,8 +210,22 @@ exports.approveGemAd = async (req, res) => {
       console.error('Failed to create ad approval notification:', notifError);
     }
 
-    return res.json({ success: true, message: 'Ad approved and published.' });
+    // 4. Send SMS Notification
+    try {
+      if (gemAd.user && gemAd.user.phone) {
+        const smsPhone = formatForSms(gemAd.user.phone);
+        await sendSms(
+          smsPhone,
+          `Manik Alert: Your ad "${gemAd.title}" has been approved and is now live on the marketplace!`
+        );
+      }
+    } catch (smsError) {
+      console.error('Failed to send ad approval SMS:', smsError);
+    }
+
+    return res.json({ success: true, message: 'Ad approved, published, and SMS sent.' });
   } catch (err) {
+    console.error('approveGemAd error:', err);
     return res.status(500).json({ success: false, message: 'Failed to approve ad.' });
   }
 };
