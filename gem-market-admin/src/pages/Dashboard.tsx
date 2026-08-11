@@ -24,9 +24,24 @@ type Payment = {
   };
 };
 
+type GemAd = {
+  _id: string;
+  title: string;
+  category: string;
+  price: { amount: number; currency: string; negotiable: boolean };
+  weightCarats: number;
+  images: { url: string; fileId: string }[];
+  createdAt: string;
+  user: {
+    name: string;
+    phone: string;
+  };
+};
+
 export default function Dashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [gemAds, setGemAds] = useState<GemAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -40,17 +55,21 @@ export default function Dashboard() {
       }
 
       try {
-        const [userRes, payRes] = await Promise.all([
+        const [userRes, payRes, gemRes] = await Promise.all([
           fetch('http://localhost:5000/api/admin/users', {
             headers: { Authorization: `Bearer ${token}` },
           }),
           fetch('http://localhost:5000/api/admin/payments/pending', {
             headers: { Authorization: `Bearer ${token}` },
           }),
+          fetch('http://localhost:5000/api/admin/gems/pending', {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
         ]);
 
         const userData = await userRes.json();
         const payData = await payRes.json();
+        const gemData = await gemRes.json();
 
         if (userData.success) {
           setUsers(userData.users);
@@ -58,8 +77,11 @@ export default function Dashboard() {
         if (payData.success) {
           setPayments(payData.payments);
         }
+        if (gemData.success) {
+          setGemAds(gemData.gemAds);
+        }
 
-        if (userRes.status === 401 || payRes.status === 401) {
+        if (userRes.status === 401 || payRes.status === 401 || gemRes.status === 401) {
           navigate('/login');
         }
       } catch {
@@ -88,6 +110,28 @@ export default function Dashboard() {
         alert('Payment approved successfully!');
       } else {
         alert(data.message || 'Failed to approve payment');
+      }
+    } catch {
+      alert('Failed to connect to the server.');
+    }
+  };
+
+  const handleApproveGemAd = async (adId: string) => {
+    if (!window.confirm('Approve this ad and publish it on the home page?')) return;
+
+    const token = localStorage.getItem('adminToken');
+    try {
+      const res = await fetch(`http://localhost:5000/api/admin/gems/${adId}/approve`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setGemAds(gemAds.filter((a) => a._id !== adId));
+        alert('Ad approved and published!');
+      } else {
+        alert(data.message || 'Failed to approve ad');
       }
     } catch {
       alert('Failed to connect to the server.');
@@ -135,7 +179,7 @@ export default function Dashboard() {
       </nav>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
           <div className="rounded-2xl bg-white p-6 shadow-sm">
             <p className="text-sm font-medium text-slate-500">Total App Users</p>
             <p className="mt-2 text-3xl font-bold" style={{ color: '#0f172a' }}>{users.length}</p>
@@ -144,9 +188,77 @@ export default function Dashboard() {
             <p className="text-sm font-medium text-slate-500">Pending Bank Slips</p>
             <p className="mt-2 text-3xl font-bold text-blue-600">{payments.length}</p>
           </div>
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">Pending Gem Ads</p>
+            <p className="mt-2 text-3xl font-bold text-blue-600">{gemAds.length}</p>
+          </div>
         </div>
 
         {error && <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-xl">{error}</div>}
+
+        {/* PENDING GEM ADS SECTION */}
+        <div className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm border border-blue-100">
+          <div className="border-b border-slate-100 bg-blue-50/50 px-6 py-4">
+            <h2 className="text-lg font-bold text-slate-900">Pending Gem Ads Approval</h2>
+          </div>
+
+          {loading ? (
+            <div className="p-8 text-center text-slate-500">Loading pending ads...</div>
+          ) : gemAds.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">No pending gem ads.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    <th className="px-6 py-4">Photo</th>
+                    <th className="px-6 py-4">Ad Details</th>
+                    <th className="px-6 py-4">Price</th>
+                    <th className="px-6 py-4">Seller</th>
+                    <th className="px-6 py-4">Submitted Date</th>
+                    <th className="px-6 py-4 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
+                  {gemAds.map((ad) => (
+                    <tr key={ad._id} className="hover:bg-slate-50/50">
+                      <td className="px-6 py-4">
+                        <a href={ad.images[0]?.url} target="_blank" rel="noreferrer">
+                          <img
+                            src={ad.images[0]?.url}
+                            alt={ad.title}
+                            className="h-16 w-16 object-cover rounded border border-slate-200 cursor-pointer hover:opacity-80 shadow-sm"
+                          />
+                        </a>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="font-semibold text-slate-900">{ad.title}</p>
+                        <p className="text-slate-500">{ad.category} • {ad.weightCarats}ct</p>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-slate-900">
+                        {ad.price.currency === 'USD' ? '$' : 'Rs.'} {ad.price.amount.toLocaleString()}
+                        {ad.price.negotiable && <span className="ml-1 text-xs font-normal text-slate-400">(Negotiable)</span>}
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="font-semibold text-slate-900">{ad.user?.name || 'Unknown'}</p>
+                        <p className="text-slate-500">+{ad.user?.phone || 'No phone'}</p>
+                      </td>
+                      <td className="px-6 py-4 text-slate-500">{new Date(ad.createdAt).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => handleApproveGemAd(ad._id)}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 shadow-sm"
+                        >
+                          Approve
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
         {/* PENDING BANK SLIPS SECTION */}
         <div className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm border border-blue-100">

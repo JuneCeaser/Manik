@@ -139,6 +139,14 @@ export default function TabsLayout() {
           href: null, // Hides this screen completely from the bottom tab bar
         }}
       />
+
+      {/* HIDDEN TAB: My Ads Page */}
+      <Tabs.Screen
+        name="my-ads"
+        options={{
+          href: null, // Hides this screen completely from the bottom tab bar
+        }}
+      />
     </Tabs>
   );
 }

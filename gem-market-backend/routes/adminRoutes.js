@@ -9,7 +9,9 @@ const {
   getAllUsers, 
   deleteUser,
   getPendingPayments,
-  approvePayment
+  approvePayment,
+  getPendingGemAds,
+  approveGemAd,
 } = require('../controllers/adminController');
 
 // Public Admin Routes
@@ -21,5 +23,7 @@ router.get('/users', protectAdmin, getAllUsers);
 router.delete('/users/:id', protectAdmin, deleteUser);
 router.get('/payments/pending', protectAdmin, getPendingPayments);
 router.put('/payments/:id/approve', protectAdmin, approvePayment);
+router.get('/gems/pending', protectAdmin, getPendingGemAds);
+router.put('/gems/:id/approve', protectAdmin, approveGemAd);
 
 module.exports = router;

@@ -2,6 +2,7 @@ const Admin = require('../models/Admin');
 const User = require('../models/User');
 const Payment = require('../models/Payment');
 const Notification = require('../models/Notification');
+const GemAd = require('../models/GemAd');
 const bcrypt = require('bcryptjs');
 const generateToken = require('../utils/generateToken');
 const sendSms = require('../utils/sendSms');
@@ -102,7 +103,7 @@ exports.deleteUser = async (req, res) => {
 };
 
 // --------------------------------------------------------------------------
-// ADMIN PAYMENT APPROVAL ACTIONS (New)
+// ADMIN PAYMENT APPROVAL ACTIONS
 // --------------------------------------------------------------------------
 exports.getPendingPayments = async (req, res) => {
   try {
@@ -162,5 +163,52 @@ exports.approvePayment = async (req, res) => {
     return res.json({ success: true, message: 'Payment approved and credits added.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Failed to approve payment.' });
+  }
+};
+
+// --------------------------------------------------------------------------
+// ADMIN GEM AD APPROVAL ACTIONS
+// --------------------------------------------------------------------------
+exports.getPendingGemAds = async (req, res) => {
+  try {
+    const gemAds = await GemAd.find({ status: 'PENDING' })
+      .populate('user', 'name phone')
+      .sort({ createdAt: -1 });
+
+    return res.json({ success: true, gemAds });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch pending ads.' });
+  }
+};
+
+exports.approveGemAd = async (req, res) => {
+  try {
+    const gemAd = await GemAd.findById(req.params.id);
+    if (!gemAd) {
+      return res.status(404).json({ success: false, message: 'Ad not found.' });
+    }
+    if (gemAd.status === 'APPROVED') {
+      return res.status(400).json({ success: false, message: 'Ad already approved.' });
+    }
+
+    gemAd.status = 'APPROVED';
+    await gemAd.save();
+
+    // In-app notification only - no SMS, no push, as requested
+    try {
+      await Notification.create({
+        user: gemAd.user,
+        title: 'Ad Approved',
+        message: `Your ad "${gemAd.title}" has been approved and is now live on Manik.`,
+        type: 'AD_APPROVED',
+        relatedGemAdId: gemAd._id,
+      });
+    } catch (notifError) {
+      console.error('Failed to create ad approval notification:', notifError);
+    }
+
+    return res.json({ success: true, message: 'Ad approved and published.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to approve ad.' });
   }
 };

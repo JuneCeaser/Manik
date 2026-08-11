@@ -17,7 +17,7 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['PAYMENT_APPROVED', 'GENERAL'],
+      enum: ['PAYMENT_APPROVED', 'AD_APPROVED', 'GENERAL'],
       default: 'GENERAL',
     },
     isRead: {
@@ -27,6 +27,10 @@ const notificationSchema = new mongoose.Schema(
     relatedPaymentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Payment',
+    },
+    relatedGemAdId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'GemAd',
     },
   },
   { timestamps: true }

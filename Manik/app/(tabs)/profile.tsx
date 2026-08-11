@@ -53,7 +53,7 @@ const PROVINCES = Object.keys(PROVINCE_CITY_MAP);
 
 export default function ProfileScreen() {
   const { user, userToken, logout, loginState } = useAuth();
-  const router = useRouter(); // <-- Used to navigate to the subscription screen
+  const router = useRouter();
 
   const [activeModal, setActiveModal] = useState<ActiveModal>('NONE');
   const [step, setStep] = useState<'INPUT' | 'OTP'>('INPUT');
@@ -404,13 +404,20 @@ export default function ProfileScreen() {
           <Text style={styles.userName}>{user.name}</Text>
           <Text style={styles.userPhone}>+{user.phone}</Text>
 
-          {/* NEW SUBSCRIPTION ROW */}
+          {/* SUBSCRIPTION ROW */}
           <Pressable style={styles.actionRow} onPress={() => router.push('/subscription')}>
             <Ionicons name="wallet-outline" size={20} color="#2563EB" />
             <Text style={[styles.actionText, { color: '#2563EB' }]}>Ad Credits / Subscribe</Text>
             <Text style={[styles.actionValue, { color: '#2563EB', fontWeight: '700' }]}>
               {(user as any)?.adCredits || 0} left
             </Text>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </Pressable>
+
+          {/* MY ADS ROW */}
+          <Pressable style={styles.actionRow} onPress={() => router.push('../my-ads')}>
+            <Ionicons name="pricetags-outline" size={20} color="#334155" />
+            <Text style={styles.actionText}>My Ads</Text>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </Pressable>
 
