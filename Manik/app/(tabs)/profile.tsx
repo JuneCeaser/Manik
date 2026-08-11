@@ -415,7 +415,7 @@ export default function ProfileScreen() {
           </Pressable>
 
           {/* MY ADS ROW */}
-          <Pressable style={styles.actionRow} onPress={() => router.push('../my-ads')}>
+          <Pressable style={styles.actionRow} onPress={() => router.push('/my-ads')}>
             <Ionicons name="pricetags-outline" size={20} color="#334155" />
             <Text style={styles.actionText}>My Ads</Text>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />

@@ -396,7 +396,7 @@ export default function AddScreen() {
             : 'Your gem has been submitted for admin approval.'
         );
         resetForm();
-        router.push('../my-ads');
+        router.push('/my-ads');
       } else {
         Alert.alert('Submission Failed', data.message || 'Something went wrong.');
       }
@@ -544,7 +544,7 @@ export default function AddScreen() {
             <View style={styles.creditsEstimateBox}>
               <Ionicons name="information-circle-outline" size={18} color="#2563EB" />
               <Text style={styles.creditsEstimateText}>
-                Editing doesn t use any ad credits, but the ad will need admin approval again before it s visible.
+                Editing doesn't use any ad credits, but the ad will need admin approval again before it's visible.
               </Text>
             </View>
           )}
