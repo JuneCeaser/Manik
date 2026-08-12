@@ -40,24 +40,41 @@ const formatPrice = (price: PublishedGemAd['price']) => {
 export default function HomeScreen() {
   const { userToken } = useAuth();
   const router = useRouter();
+  
   const [ads, setAds] = useState<PublishedGemAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
-  const fetchAds = useCallback(async () => {
+  // Pagination states added here
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const fetchAds = useCallback(async (pageNumber = 1) => {
+    if (pageNumber === 1) setLoading(true);
+    else setLoadingMore(true);
+
     try {
-      const res = await fetch(`${GEMS_URL}/published`, {
+      const res = await fetch(`${GEMS_URL}/published?page=${pageNumber}&limit=20`, {
         headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
       });
       const data = await res.json();
+      
       if (data.success) {
-        setAds(data.gemAds);
+        if (pageNumber === 1) {
+          setAds(data.gemAds); // Replace entirely if it's the first page
+        } else {
+          setAds((prev) => [...prev, ...data.gemAds]); // Attach to the bottom if scrolling
+        }
+        setHasMore(data.hasMore);
+        setPage(pageNumber);
       }
     } catch {
       // Silently fail - the empty state will show
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [userToken]);
 
@@ -80,7 +97,7 @@ export default function HomeScreen() {
   }, [userToken]);
 
   useEffect(() => {
-    fetchAds();
+    fetchAds(1);
   }, [fetchAds]);
 
   useFocusEffect(
@@ -91,9 +108,17 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchAds(), fetchFavoriteIds()]);
+    // When pulling down to refresh, force it to fetch Page 1 again
+    await Promise.all([fetchAds(1), fetchFavoriteIds()]);
     setRefreshing(false);
   }, [fetchAds, fetchFavoriteIds]);
+
+  // Triggered when scrolling near the bottom
+  const loadMoreAds = () => {
+    if (!loadingMore && hasMore) {
+      fetchAds(page + 1);
+    }
+  };
 
   const toggleFavorite = async (adId: string) => {
     if (!userToken) {
@@ -172,7 +197,7 @@ export default function HomeScreen() {
       <StatusBar style="dark" />
       <Text style={styles.headerTitle}>Manik Gem Market</Text>
 
-      {loading ? (
+      {loading && page === 1 ? (
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#2563EB" />
         </View>
@@ -185,6 +210,16 @@ export default function HomeScreen() {
           columnWrapperStyle={styles.row}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
+          
+          // Pagination triggers added here
+          onEndReached={loadMoreAds}
+          onEndReachedThreshold={0.5} // Triggers when the user is halfway down the current list
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 20 }} />
+            ) : null
+          }
+
           ListEmptyComponent={
             <View style={styles.centerContent}>
               <Ionicons name="diamond-outline" size={48} color="#CBD5E1" />

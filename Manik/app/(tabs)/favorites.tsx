@@ -38,41 +38,67 @@ const formatPrice = (price: FavoritedGemAd['price']) => {
 export default function FavoritesScreen() {
   const { userToken } = useAuth();
   const router = useRouter();
+  
   const [ads, setAds] = useState<FavoritedGemAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchFavorites = useCallback(async () => {
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const fetchFavorites = useCallback(async (pageNumber = 1) => {
     if (!userToken) {
       setLoading(false);
       return;
     }
+
+    if (pageNumber === 1) setLoading(true);
+    else setLoadingMore(true);
+
     try {
-      const res = await fetch(FAVORITES_URL, {
+      // Added ?page=x&limit=20 to the URL
+      const res = await fetch(`${FAVORITES_URL}?page=${pageNumber}&limit=20`, {
         headers: { Authorization: `Bearer ${userToken}` },
       });
       const data = await res.json();
+      
       if (data.success) {
-        setAds(data.gemAds);
+        if (pageNumber === 1) {
+          setAds(data.gemAds); // First page replaces the list
+        } else {
+          setAds((prev) => [...prev, ...data.gemAds]); // Next pages attach to the bottom
+        }
+        setHasMore(data.hasMore);
+        setPage(pageNumber);
       }
     } catch {
       // Silently fail - the empty state will show
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [userToken]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchFavorites();
+      fetchFavorites(1);
     }, [fetchFavorites])
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchFavorites();
+    await fetchFavorites(1);
     setRefreshing(false);
   }, [fetchFavorites]);
+
+  // Load more trigger
+  const loadMoreAds = () => {
+    if (!loadingMore && hasMore) {
+      fetchFavorites(page + 1);
+    }
+  };
 
   const removeFavorite = async (adId: string) => {
     if (!userToken) return;
@@ -138,7 +164,7 @@ export default function FavoritesScreen() {
       <StatusBar style="dark" />
       <Text style={styles.headerTitle}>Favorites</Text>
 
-      {loading ? (
+      {loading && page === 1 ? (
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#2563EB" />
         </View>
@@ -151,6 +177,16 @@ export default function FavoritesScreen() {
           columnWrapperStyle={styles.row}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
+          
+          // Pagination triggers
+          onEndReached={loadMoreAds}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 20 }} />
+            ) : null
+          }
+
           ListEmptyComponent={
             <View style={styles.centerContent}>
               <Ionicons name="heart-outline" size={48} color="#CBD5E1" />

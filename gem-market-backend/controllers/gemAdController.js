@@ -114,13 +114,24 @@ exports.getGemAdById = async (req, res) => {
   }
 };
 
+// --- PAGINATION ADDED HERE ---
 exports.getPublishedGemAds = async (req, res) => {
   try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20; // Load 20 items per scroll
+    const skip = (page - 1) * limit;
+
     const gemAds = await GemAd.find({ status: 'APPROVED' })
       .populate('user', 'name')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
-    return res.json({ success: true, gemAds });
+    // Check if there are more gems to load after this batch
+    const totalAds = await GemAd.countDocuments({ status: 'APPROVED' });
+    const hasMore = skip + gemAds.length < totalAds;
+
+    return res.json({ success: true, gemAds, hasMore });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Could not fetch ads.' });
   }

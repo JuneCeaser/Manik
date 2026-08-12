@@ -32,11 +32,18 @@ exports.toggleFavorite = async (req, res) => {
 
 // --------------------------------------------------------------------------
 // GET MY FAVORITE GEM ADS (Full details, for the Favorites tab)
+// --- PAGINATION ADDED HERE ---
 // --------------------------------------------------------------------------
 exports.getMyFavorites = async (req, res) => {
   try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20; // Load 20 items per scroll
+    const skip = (page - 1) * limit;
+
     const favorites = await Favorite.find({ user: req.user._id })
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate({
         path: 'gemAd',
         populate: { path: 'user', select: 'name' },
@@ -45,7 +52,11 @@ exports.getMyFavorites = async (req, res) => {
     // A favorited ad may have since been deleted by its owner - skip those.
     const gemAds = favorites.filter((fav) => fav.gemAd).map((fav) => fav.gemAd);
 
-    return res.json({ success: true, gemAds });
+    // Check if there are more favorites to load after this batch
+    const totalFavorites = await Favorite.countDocuments({ user: req.user._id });
+    const hasMore = skip + favorites.length < totalFavorites;
+
+    return res.json({ success: true, gemAds, hasMore });
   } catch (err) {
     console.error('getMyFavorites error:', err);
     return res.status(500).json({ success: false, message: 'Could not fetch favorites.' });
