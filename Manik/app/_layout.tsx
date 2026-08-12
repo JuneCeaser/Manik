@@ -29,7 +29,9 @@ function RootLayoutNav() {
   }
 
   const inTabsGroup = segments[0] === '(tabs)';
+  const inGemGroup = segments[0] === 'gem'; // <-- Added gem group tracking
   const onOnboardingScreen = segments[0] === 'onboarding';
+  const isAuthRoute = segments[0] === 'login' || segments[0] === 'register' || segments[0] === 'forgot-password';
 
   // Very first launch ever -> always show onboarding first
   if (!hasOnboarded && !onOnboardingScreen) {
@@ -42,13 +44,13 @@ function RootLayoutNav() {
   }
 
   if (hasOnboarded) {
-    // Logged in but outside tabs -> redirect to dashboard
-    if (userToken && !inTabsGroup) {
+    // If logged in and trying to access login/register -> redirect to dashboard
+    if (userToken && isAuthRoute) {
       return <Redirect href="/(tabs)" />;
     }
 
-    // Not logged in but trying to view tabs -> redirect to login
-    if (!userToken && inTabsGroup) {
+    // Not logged in but trying to view protected areas (tabs or gem details) -> redirect to login
+    if (!userToken && (inTabsGroup || inGemGroup)) {
       return <Redirect href="/login" />;
     }
   }

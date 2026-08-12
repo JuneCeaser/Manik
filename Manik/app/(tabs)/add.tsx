@@ -48,7 +48,6 @@ type AppImage = {
   url: string;
   fileId: string;
   isNew?: boolean;
-  base64?: string;
 };
 
 // Reusable option-list modal used for every dropdown on this screen
@@ -244,17 +243,14 @@ export default function AddScreen() {
       allowsMultipleSelection: true,
       selectionLimit: remainingSlots,
       quality: 0.5,
-      base64: true,
     });
 
     if (!result.canceled) {
       const newImages: AppImage[] = result.assets
-        .filter((a) => a.base64)
         .map((a) => ({
-          url: a.uri,
+          url: a.uri, // Use the local file URI temporarily
           fileId: '',
           isNew: true,
-          base64: `data:image/jpeg;base64,${a.base64}`,
         }));
       setImages((prev) => [...prev, ...newImages].slice(0, 5));
     }
@@ -274,15 +270,13 @@ export default function AddScreen() {
       mediaTypes: ['images'],
       allowsEditing: true,
       quality: 0.5,
-      base64: true,
     });
 
-    if (!result.canceled && result.assets[0].base64) {
+    if (!result.canceled) {
       setCertificateImage({
-        url: result.assets[0].uri,
+        url: result.assets[0].uri, // Use the local file URI temporarily
         fileId: '',
         isNew: true,
-        base64: `data:image/jpeg;base64,${result.assets[0].base64}`,
       });
     }
   };
@@ -346,10 +340,16 @@ export default function AddScreen() {
         return Alert.alert('Server Error', 'Failed to connect to image provider auth.');
       }
 
-      // Reusable direct-upload function straight to ImageKit CDN
-      const uploadToImageKit = async (base64Str: string, folder: string) => {
+      // Reusable memory-safe direct-upload function straight to ImageKit CDN
+      const uploadToImageKit = async (fileUri: string, folder: string) => {
         const formData = new FormData();
-        formData.append('file', base64Str);
+        
+        formData.append('file', {
+          uri: fileUri,
+          name: `gem_${Date.now()}.jpg`,
+          type: 'image/jpeg',
+        } as any);
+
         formData.append('publicKey', authData.publicKey);
         formData.append('signature', authData.signature);
         formData.append('expire', String(authData.expire));
@@ -357,16 +357,25 @@ export default function AddScreen() {
         formData.append('fileName', `gem_${Date.now()}.jpg`);
         formData.append('folder', folder);
 
-        const res = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: formData });
-        if (!res.ok) throw new Error('Image upload failed');
+        const res = await fetch('https://upload.imagekit.io/api/v1/files/upload', { 
+          method: 'POST', 
+          body: formData,
+          headers: { Accept: 'application/json' }
+        });
+        
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error("ImageKit Error:", errText);
+          throw new Error('Image upload failed');
+        }
         return await res.json();
       };
 
-      // 2. Upload Only New Images directly
+      // 2. Upload Only New Images directly using the local URI
       const finalImages = [];
       for (const img of images) {
-        if (img.isNew && img.base64) {
-          const uploaded = await uploadToImageKit(img.base64, '/gem_ads');
+        if (img.isNew && img.url) {
+          const uploaded = await uploadToImageKit(img.url, '/gem_ads');
           finalImages.push({ url: uploaded.url, fileId: uploaded.fileId });
         } else {
           finalImages.push({ url: img.url, fileId: img.fileId });
@@ -375,8 +384,8 @@ export default function AddScreen() {
 
       // 3. Upload New Certificate (if modified)
       let finalCertificate = certificateImage && !certificateImage.isNew ? { url: certificateImage.url, fileId: certificateImage.fileId } : null;
-      if (certificateImage && certificateImage.isNew && certificateImage.base64) {
-        const uploaded = await uploadToImageKit(certificateImage.base64, '/gem_certificates');
+      if (certificateImage && certificateImage.isNew && certificateImage.url) {
+        const uploaded = await uploadToImageKit(certificateImage.url, '/gem_certificates');
         finalCertificate = { url: uploaded.url, fileId: uploaded.fileId };
       }
 
@@ -455,7 +464,8 @@ export default function AddScreen() {
       } else {
         Alert.alert('Submission Failed', data.message || 'Something went wrong.');
       }
-    } catch {
+    } catch (error) {
+      console.error("Submit Crash:", error);
       Alert.alert('Error', 'Failed to connect to the server.');
     } finally {
       setSubmitting(false);
@@ -603,7 +613,7 @@ export default function AddScreen() {
             <View style={styles.creditsEstimateBox}>
               <Ionicons name="information-circle-outline" size={18} color="#2563EB" />
               <Text style={styles.creditsEstimateText}>
-                Editing doesn t use any ad credits, but the ad will need admin approval again before its visible.
+                Editing doesnt use any ad credits, but the ad will need admin approval again before its visible.
               </Text>
             </View>
           )}

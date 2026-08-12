@@ -10,7 +10,8 @@ const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
-const gemAdRoutes = require('./routes/gemAdRoutes'); // <-- ADDED THIS
+const gemAdRoutes = require('./routes/gemAdRoutes');
+const favoriteRoutes = require('./routes/favoriteRoutes'); // <-- ADDED THIS
 
 const app = express();
 
@@ -26,7 +27,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/gems', gemAdRoutes); // <-- ADDED THIS
+app.use('/api/gems', gemAdRoutes);
+app.use('/api/favorites', favoriteRoutes); // <-- ADDED THIS
 
 app.get('/', (req, res) => res.json({ status: 'Gem Market backend running' }));
 
