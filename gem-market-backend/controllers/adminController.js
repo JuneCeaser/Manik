@@ -210,20 +210,7 @@ exports.approveGemAd = async (req, res) => {
       console.error('Failed to create ad approval notification:', notifError);
     }
 
-    // 4. Send SMS Notification
-    try {
-      if (gemAd.user && gemAd.user.phone) {
-        const smsPhone = formatForSms(gemAd.user.phone);
-        await sendSms(
-          smsPhone,
-          `Manik Alert: Your ad "${gemAd.title}" has been approved and is now live on the marketplace!`
-        );
-      }
-    } catch (smsError) {
-      console.error('Failed to send ad approval SMS:', smsError);
-    }
-
-    return res.json({ success: true, message: 'Ad approved, published, and SMS sent.' });
+    return res.json({ success: true, message: 'Ad approved and published.' });
   } catch (err) {
     console.error('approveGemAd error:', err);
     return res.status(500).json({ success: false, message: 'Failed to approve ad.' });

@@ -52,7 +52,7 @@ type AppImage = {
   url: string;
   fileId: string;
   isNew?: boolean;
-  base64?: string;
+  ext?: string;
 };
 
 const SelectModal = ({ visible, title, options, onSelect, onClose }: { visible: boolean; title: string; options: string[]; onSelect: (value: string) => void; onClose: () => void; }) => (
@@ -216,18 +216,21 @@ export default function AddScreen() {
       allowsMultipleSelection: true,
       selectionLimit: remainingSlots,
       quality: 0.5,
-      base64: true,
     });
 
     if (!result.canceled) {
       const newImages: AppImage[] = result.assets
-        .filter((a) => a.base64)
-        .map((a) => ({
-          url: a.uri, 
-          fileId: '',
-          isNew: true,
-          base64: `data:image/jpeg;base64,${a.base64}`,
-        }));
+        .map((a) => {
+          const mimeType = a.mimeType || (a.uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+          const ext = mimeType === 'image/png' ? 'png' : 'jpg';
+
+          return {
+            url: a.uri, 
+            fileId: '',
+            isNew: true,
+            ext: ext,
+          };
+        });
       setImages((prev) => [...prev, ...newImages].slice(0, 5));
     }
   };
@@ -246,15 +249,18 @@ export default function AddScreen() {
       mediaTypes: ['images'],
       allowsEditing: true,
       quality: 0.5,
-      base64: true,
     });
 
-    if (!result.canceled && result.assets[0].base64) {
+    if (!result.canceled) {
+      const a = result.assets[0];
+      const mimeType = a.mimeType || (a.uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+      const ext = mimeType === 'image/png' ? 'png' : 'jpg';
+
       setCertificateImage({
-        url: result.assets[0].uri, 
+        url: a.uri, 
         fileId: '',
         isNew: true,
-        base64: `data:image/jpeg;base64,${result.assets[0].base64}`,
+        ext: ext,
       });
     }
   };
@@ -313,7 +319,7 @@ export default function AddScreen() {
 
     setSubmitting(true);
     try {
-      const uploadToImageKit = async (base64Str: string, folder: string) => {
+      const uploadToImageKit = async (fileUri: string, folder: string, ext: string = 'jpg') => {
         const authRes = await fetch(`${GEMS_URL}/imagekit-auth?t=${Date.now()}${Math.random()}`, {
           headers: { 
             Authorization: `Bearer ${userToken}`,
@@ -326,9 +332,13 @@ export default function AddScreen() {
         if (!authData.success) throw new Error('Failed to get upload signature.');
 
         const formData = new FormData();
-        const generatedFileName = `gem_${Date.now()}_${Math.floor(Math.random() * 1000)}.jpg`;
+        const generatedFileName = `gem_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
         
-        formData.append('file', base64Str);
+        formData.append('file', {
+          uri: fileUri,
+          name: generatedFileName,
+          type: `image/${ext === 'png' ? 'png' : 'jpeg'}`,
+        } as any);
         formData.append('fileName', generatedFileName); 
         formData.append('publicKey', authData.publicKey);
         formData.append('signature', authData.signature);
@@ -343,8 +353,8 @@ export default function AddScreen() {
 
       const finalImages = [];
       for (const img of images) {
-        if (img.isNew && img.base64) {
-          const uploaded = await uploadToImageKit(img.base64, '/gem_ads');
+        if (img.isNew && img.url) {
+          const uploaded = await uploadToImageKit(img.url, '/gem_ads', img.ext);
           finalImages.push({ url: uploaded.url, fileId: uploaded.fileId });
         } else {
           finalImages.push({ url: img.url, fileId: img.fileId });
@@ -352,8 +362,8 @@ export default function AddScreen() {
       }
 
       let finalCertificate = certificateImage && !certificateImage.isNew ? { url: certificateImage.url, fileId: certificateImage.fileId } : null;
-      if (certificateImage && certificateImage.isNew && certificateImage.base64) {
-        const uploaded = await uploadToImageKit(certificateImage.base64, '/gem_certificates');
+      if (certificateImage && certificateImage.isNew && certificateImage.url) {
+        const uploaded = await uploadToImageKit(certificateImage.url, '/gem_certificates', certificateImage.ext);
         finalCertificate = { url: uploaded.url, fileId: uploaded.fileId };
       }
 
@@ -412,7 +422,7 @@ export default function AddScreen() {
       }
 
       if (res.status === 402 || data.code === 'INSUFFICIENT_CREDITS') {
-        Alert.alert('Not Enough Ad Credits', data.message, [
+        Alert.alert('Not Enough Ad Credits', data.message || 'You need more ad credits to post this listing.', [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Get Credits', onPress: () => router.push('/subscription') },
         ]);
