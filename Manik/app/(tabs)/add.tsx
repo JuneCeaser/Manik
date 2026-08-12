@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
@@ -215,23 +216,29 @@ export default function AddScreen() {
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       selectionLimit: remainingSlots,
-      quality: 0.5,
+      quality: 1, // Let ImageManipulator handle the compression below
     });
 
     if (!result.canceled) {
-      const newImages: AppImage[] = result.assets
-        .map((a) => {
-          const mimeType = a.mimeType || (a.uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
-          const ext = mimeType === 'image/png' ? 'png' : 'jpg';
+      // Process all images asynchronously to ensure they are safely resized
+      const processedImages = await Promise.all(
+        result.assets.map(async (a) => {
+          // Shrink massive DSLR photos to a safe 1920px width and convert to JPEG
+          const manipulated = await ImageManipulator.manipulateAsync(
+            a.uri,
+            [{ resize: { width: 1920 } }],
+            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+          );
 
           return {
-            url: a.uri, 
+            url: manipulated.uri, 
             fileId: '',
             isNew: true,
-            ext: ext,
+            ext: 'jpg', // Guaranteed to be jpg now
           };
-        });
-      setImages((prev) => [...prev, ...newImages].slice(0, 5));
+        })
+      );
+      setImages((prev) => [...prev, ...processedImages].slice(0, 5));
     }
   };
 
@@ -248,19 +255,22 @@ export default function AddScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      quality: 0.5,
+      quality: 1,
     });
 
     if (!result.canceled) {
-      const a = result.assets[0];
-      const mimeType = a.mimeType || (a.uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
-      const ext = mimeType === 'image/png' ? 'png' : 'jpg';
+      // Safely resize and format the certificate
+      const manipulated = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 1920 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
 
       setCertificateImage({
-        url: a.uri, 
+        url: manipulated.uri, 
         fileId: '',
         isNew: true,
-        ext: ext,
+        ext: 'jpg',
       });
     }
   };
@@ -337,7 +347,7 @@ export default function AddScreen() {
         formData.append('file', {
           uri: fileUri,
           name: generatedFileName,
-          type: `image/${ext === 'png' ? 'png' : 'jpeg'}`,
+          type: 'image/jpeg',
         } as any);
         formData.append('fileName', generatedFileName); 
         formData.append('publicKey', authData.publicKey);
@@ -354,7 +364,7 @@ export default function AddScreen() {
       const finalImages = [];
       for (const img of images) {
         if (img.isNew && img.url) {
-          const uploaded = await uploadToImageKit(img.url, '/gem_ads', img.ext);
+          const uploaded = await uploadToImageKit(img.url, 'gem_ads', img.ext);
           finalImages.push({ url: uploaded.url, fileId: uploaded.fileId });
         } else {
           finalImages.push({ url: img.url, fileId: img.fileId });
@@ -363,7 +373,7 @@ export default function AddScreen() {
 
       let finalCertificate = certificateImage && !certificateImage.isNew ? { url: certificateImage.url, fileId: certificateImage.fileId } : null;
       if (certificateImage && certificateImage.isNew && certificateImage.url) {
-        const uploaded = await uploadToImageKit(certificateImage.url, '/gem_certificates', certificateImage.ext);
+        const uploaded = await uploadToImageKit(certificateImage.url, 'gem_certificates', certificateImage.ext);
         finalCertificate = { url: uploaded.url, fileId: uploaded.fileId };
       }
 
