@@ -24,6 +24,8 @@ import {
   GEM_COLORS,
   GEM_SHAPES,
   GEM_TREATMENTS,
+  GEM_ORIGINS,
+  GEM_CLARITIES,
   CERTIFICATION_STATUSES,
   CERTIFICATION_LABS,
   PROVINCE_CITY_MAP,
@@ -37,6 +39,8 @@ type PickerKey =
   | 'category'
   | 'color'
   | 'shape'
+  | 'origin'
+  | 'clarity'
   | 'treatment'
   | 'certification'
   | 'lab'
@@ -48,22 +52,10 @@ type AppImage = {
   url: string;
   fileId: string;
   isNew?: boolean;
+  base64?: string;
 };
 
-// Reusable option-list modal used for every dropdown on this screen
-const SelectModal = ({
-  visible,
-  title,
-  options,
-  onSelect,
-  onClose,
-}: {
-  visible: boolean;
-  title: string;
-  options: string[];
-  onSelect: (value: string) => void;
-  onClose: () => void;
-}) => (
+const SelectModal = ({ visible, title, options, onSelect, onClose }: { visible: boolean; title: string; options: string[]; onSelect: (value: string) => void; onClose: () => void; }) => (
   <Modal visible={visible} animationType="fade" transparent>
     <Pressable style={styles.modalOverlay} onPress={onClose}>
       <View style={styles.pickerCard}>
@@ -73,13 +65,7 @@ const SelectModal = ({
           keyExtractor={(item) => item}
           style={{ marginTop: 12, maxHeight: 320 }}
           renderItem={({ item }) => (
-            <Pressable
-              style={styles.optionRow}
-              onPress={() => {
-                onSelect(item);
-                onClose();
-              }}
-            >
+            <Pressable style={styles.optionRow} onPress={() => { onSelect(item); onClose(); }}>
               <Text style={styles.optionText}>{item}</Text>
             </Pressable>
           )}
@@ -89,29 +75,11 @@ const SelectModal = ({
   </Modal>
 );
 
-const FieldSelector = ({
-  label,
-  value,
-  placeholder,
-  onPress,
-  disabled,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) => (
+const FieldSelector = ({ label, value, placeholder, onPress, disabled }: { label: string; value: string; placeholder: string; onPress: () => void; disabled?: boolean; }) => (
   <View style={styles.fieldGroup}>
     <Text style={styles.fieldLabel}>{label}</Text>
-    <Pressable
-      style={[styles.dropdownSelector, disabled && styles.dropdownDisabled]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <Text style={value ? styles.dropdownSelectedText : styles.dropdownPlaceholderText}>
-        {value || placeholder}
-      </Text>
+    <Pressable style={[styles.dropdownSelector, disabled && styles.dropdownDisabled]} onPress={onPress} disabled={disabled}>
+      <Text style={value ? styles.dropdownSelectedText : styles.dropdownPlaceholderText}>{value || placeholder}</Text>
       <Ionicons name="chevron-down" size={16} color="#334155" />
     </Pressable>
   </View>
@@ -142,6 +110,11 @@ export default function AddScreen() {
   const [color, setColor] = useState('');
   const [customColor, setCustomColor] = useState('');
   const [shape, setShape] = useState('');
+  const [origin, setOrigin] = useState('');
+  const [clarity, setClarity] = useState('');
+  const [dimLength, setDimLength] = useState('');
+  const [dimWidth, setDimWidth] = useState('');
+  const [dimDepth, setDimDepth] = useState('');
   const [treatment, setTreatment] = useState('');
   const [certificationStatus, setCertificationStatus] = useState('Not Certified');
   const [labName, setLabName] = useState('');
@@ -185,6 +158,11 @@ export default function AddScreen() {
         setCurrency(ad.price.currency);
         setNegotiable(ad.price.negotiable);
         setWeightCarats(String(ad.weightCarats));
+        setOrigin(ad.origin || '');
+        setClarity(ad.clarity || '');
+        setDimLength(ad.dimensions?.length ? String(ad.dimensions.length) : '');
+        setDimWidth(ad.dimensions?.width ? String(ad.dimensions.width) : '');
+        setDimDepth(ad.dimensions?.depth ? String(ad.dimensions.depth) : '');
 
         if (GEM_COLORS.includes(ad.color)) {
           setColor(ad.color);
@@ -219,7 +197,7 @@ export default function AddScreen() {
     };
 
     loadAd();
- // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId, isEditMode]);
 
   const pickImages = async () => {
@@ -238,14 +216,17 @@ export default function AddScreen() {
       allowsMultipleSelection: true,
       selectionLimit: remainingSlots,
       quality: 0.5,
+      base64: true,
     });
 
     if (!result.canceled) {
       const newImages: AppImage[] = result.assets
+        .filter((a) => a.base64)
         .map((a) => ({
           url: a.uri, 
           fileId: '',
           isNew: true,
+          base64: `data:image/jpeg;base64,${a.base64}`,
         }));
       setImages((prev) => [...prev, ...newImages].slice(0, 5));
     }
@@ -265,13 +246,15 @@ export default function AddScreen() {
       mediaTypes: ['images'],
       allowsEditing: true,
       quality: 0.5,
+      base64: true,
     });
 
-    if (!result.canceled) {
+    if (!result.canceled && result.assets[0].base64) {
       setCertificateImage({
         url: result.assets[0].uri, 
         fileId: '',
         isNew: true,
+        base64: `data:image/jpeg;base64,${result.assets[0].base64}`,
       });
     }
   };
@@ -288,6 +271,11 @@ export default function AddScreen() {
     setColor('');
     setCustomColor('');
     setShape('');
+    setOrigin('');
+    setClarity('');
+    setDimLength('');
+    setDimWidth('');
+    setDimDepth('');
     setTreatment('');
     setCertificationStatus('Not Certified');
     setLabName('');
@@ -303,11 +291,12 @@ export default function AddScreen() {
     if (!title.trim()) return 'Please enter an ad title.';
     if (!category) return 'Please select a gem category.';
     if (!priceAmount || isNaN(Number(priceAmount)) || Number(priceAmount) <= 0) return 'Please enter a valid price.';
-    if (!weightCarats || isNaN(Number(weightCarats)) || Number(weightCarats) <= 0)
-      return 'Please enter a valid weight in carats.';
+    if (!weightCarats || isNaN(Number(weightCarats)) || Number(weightCarats) <= 0) return 'Please enter a valid weight in carats.';
     if (!color) return 'Please select a color.';
     if (color === 'Other' && !customColor.trim()) return 'Please enter a custom color.';
     if (!shape) return 'Please select a shape / cut.';
+    if (!origin) return 'Please select the gem origin.';
+    if (!clarity) return 'Please select the clarity grade.';
     if (!treatment) return 'Please select a treatment status.';
     if (certificationStatus === 'Certified' && !labName) return 'Please select the certifying lab.';
     if (!province || !city) return 'Please select your location.';
@@ -324,7 +313,7 @@ export default function AddScreen() {
 
     setSubmitting(true);
     try {
-      const uploadToImageKit = async (fileUri: string, folder: string) => {
+      const uploadToImageKit = async (base64Str: string, folder: string) => {
         const authRes = await fetch(`${GEMS_URL}/imagekit-auth?t=${Date.now()}${Math.random()}`, {
           headers: { 
             Authorization: `Bearer ${userToken}`,
@@ -334,20 +323,12 @@ export default function AddScreen() {
         });
         const authData = await authRes.json();
 
-        if (!authData.success) {
-          throw new Error('Failed to get upload signature.');
-        }
+        if (!authData.success) throw new Error('Failed to get upload signature.');
 
         const formData = new FormData();
         const generatedFileName = `gem_${Date.now()}_${Math.floor(Math.random() * 1000)}.jpg`;
         
-        formData.append('file', {
-          uri: fileUri,
-          name: generatedFileName,
-          type: 'image/jpeg',
-        } as any);
-
-        // --- FIX: Added the missing fileName parameter back! ---
+        formData.append('file', base64Str);
         formData.append('fileName', generatedFileName); 
         formData.append('publicKey', authData.publicKey);
         formData.append('signature', authData.signature);
@@ -355,24 +336,15 @@ export default function AddScreen() {
         formData.append('token', authData.token);
         formData.append('folder', folder);
 
-        const res = await fetch('https://upload.imagekit.io/api/v1/files/upload', { 
-          method: 'POST', 
-          body: formData,
-          headers: { Accept: 'application/json' }
-        });
-        
-        if (!res.ok) {
-          const errText = await res.text();
-          console.error("ImageKit Error:", errText);
-          throw new Error('Image upload failed');
-        }
+        const res = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Image upload failed');
         return await res.json();
       };
 
       const finalImages = [];
       for (const img of images) {
-        if (img.isNew && img.url) {
-          const uploaded = await uploadToImageKit(img.url, '/gem_ads');
+        if (img.isNew && img.base64) {
+          const uploaded = await uploadToImageKit(img.base64, '/gem_ads');
           finalImages.push({ url: uploaded.url, fileId: uploaded.fileId });
         } else {
           finalImages.push({ url: img.url, fileId: img.fileId });
@@ -380,8 +352,8 @@ export default function AddScreen() {
       }
 
       let finalCertificate = certificateImage && !certificateImage.isNew ? { url: certificateImage.url, fileId: certificateImage.fileId } : null;
-      if (certificateImage && certificateImage.isNew && certificateImage.url) {
-        const uploaded = await uploadToImageKit(certificateImage.url, '/gem_certificates');
+      if (certificateImage && certificateImage.isNew && certificateImage.base64) {
+        const uploaded = await uploadToImageKit(certificateImage.base64, '/gem_certificates');
         finalCertificate = { url: uploaded.url, fileId: uploaded.fileId };
       }
 
@@ -398,6 +370,13 @@ export default function AddScreen() {
         weightCarats: Number(weightCarats),
         color: finalColor,
         shape,
+        origin,
+        clarity,
+        dimensions: {
+          length: dimLength ? Number(dimLength) : 0,
+          width: dimWidth ? Number(dimWidth) : 0,
+          depth: dimDepth ? Number(dimDepth) : 0,
+        },
         treatment,
         certification: {
           status: certificationStatus,
@@ -420,10 +399,7 @@ export default function AddScreen() {
 
       const res = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${userToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
         body: JSON.stringify(payload),
       });
 
@@ -436,24 +412,15 @@ export default function AddScreen() {
       }
 
       if (res.status === 402 || data.code === 'INSUFFICIENT_CREDITS') {
-        Alert.alert(
-          'Not Enough Ad Credits',
-          data.message || 'You need more ad credits to post this listing.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Get Credits', onPress: () => router.push('/subscription') },
-          ]
-        );
+        Alert.alert('Not Enough Ad Credits', data.message, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Get Credits', onPress: () => router.push('/subscription') },
+        ]);
         return;
       }
 
       if (data.success) {
-        Alert.alert(
-          isEditMode ? 'Ad Updated' : 'Ad Submitted',
-          isEditMode
-            ? 'Your changes were saved and the ad has been resubmitted for admin approval.'
-            : 'Your gem has been submitted for admin approval.'
-        );
+        Alert.alert(isEditMode ? 'Ad Updated' : 'Ad Submitted', isEditMode ? 'Your changes were saved and the ad has been resubmitted for admin approval.' : 'Your gem has been submitted for admin approval.');
         resetForm();
         router.setParams({ editId: '' });
         router.push('../my-ads');
@@ -461,17 +428,13 @@ export default function AddScreen() {
         Alert.alert('Submission Failed', data.message || 'Something went wrong.');
       }
     } catch (error) {
-      console.error("Submit Crash:", error);
       Alert.alert('Error', 'Failed to connect to the server.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const estimatedCredits =
-    priceAmount && !isNaN(Number(priceAmount)) && Number(priceAmount) > 0
-      ? getEstimatedRequiredCredits(Number(priceAmount), currency)
-      : null;
+  const estimatedCredits = priceAmount && !isNaN(Number(priceAmount)) && Number(priceAmount) > 0 ? getEstimatedRequiredCredits(Number(priceAmount), currency) : null;
 
   if (isEditMode && initialLoading) {
     return (
@@ -489,11 +452,7 @@ export default function AddScreen() {
         <View style={styles.headerRow}>
           <Text style={styles.headerTitle}>{isEditMode ? 'Edit Gem' : 'Add New Gem'}</Text>
           {isEditMode && (
-            <Pressable onPress={() => {
-              resetForm();
-              router.setParams({ editId: '' });
-              router.back();
-            }}>
+            <Pressable onPress={() => { resetForm(); router.setParams({ editId: '' }); router.back(); }}>
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
           )}
@@ -549,49 +508,23 @@ export default function AddScreen() {
 
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Ad Title</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Natural Royal Blue Sapphire 2.5ct"
-              value={title}
-              onChangeText={setTitle}
-            />
+            <TextInput style={styles.input} placeholder="e.g. Natural Royal Blue Sapphire 2.5ct" value={title} onChangeText={setTitle} />
           </View>
 
-          <FieldSelector
-            label="Gem Category"
-            value={category}
-            placeholder="Select category"
-            onPress={() => setActivePicker('category')}
-          />
+          <FieldSelector label="Gem Category" value={category} placeholder="Select category" onPress={() => setActivePicker('category')} />
 
           <Text style={styles.fieldLabel}>Price</Text>
           <View style={styles.currencyToggleRow}>
             {(['LKR', 'USD'] as const).map((cur) => (
-              <Pressable
-                key={cur}
-                style={[styles.currencyOption, currency === cur && styles.currencyOptionActive]}
-                onPress={() => setCurrency(cur)}
-              >
-                <Text style={[styles.currencyOptionText, currency === cur && styles.currencyOptionTextActive]}>
-                  {cur}
-                </Text>
+              <Pressable key={cur} style={[styles.currencyOption, currency === cur && styles.currencyOptionActive]} onPress={() => setCurrency(cur)}>
+                <Text style={[styles.currencyOptionText, currency === cur && styles.currencyOptionTextActive]}>{cur}</Text>
               </Pressable>
             ))}
-            <TextInput
-              style={styles.priceInput}
-              placeholder="Amount"
-              keyboardType="numeric"
-              value={priceAmount}
-              onChangeText={setPriceAmount}
-            />
+            <TextInput style={styles.priceInput} placeholder="Amount" keyboardType="numeric" value={priceAmount} onChangeText={setPriceAmount} />
           </View>
 
           <Pressable style={styles.checkboxRow} onPress={() => setNegotiable((v) => !v)}>
-            <Ionicons
-              name={negotiable ? 'checkbox' : 'square-outline'}
-              size={22}
-              color={negotiable ? '#2563EB' : '#94A3B8'}
-            />
+            <Ionicons name={negotiable ? 'checkbox' : 'square-outline'} size={22} color={negotiable ? '#2563EB' : '#94A3B8'} />
             <Text style={styles.checkboxLabel}>Price is negotiable</Text>
           </Pressable>
 
@@ -599,17 +532,7 @@ export default function AddScreen() {
             <View style={styles.creditsEstimateBox}>
               <Ionicons name="information-circle-outline" size={18} color="#2563EB" />
               <Text style={styles.creditsEstimateText}>
-                This ad will use approximately {estimatedCredits} ad credit{estimatedCredits > 1 ? 's' : ''}. You have{' '}
-                {(user as any)?.adCredits ?? 0} available.
-              </Text>
-            </View>
-          )}
-
-          {isEditMode && (
-            <View style={styles.creditsEstimateBox}>
-              <Ionicons name="information-circle-outline" size={18} color="#2563EB" />
-              <Text style={styles.creditsEstimateText}>
-                Editing doesnt use any ad credits, but the ad will need admin approval again before its visible.
+                This ad will use approximately {estimatedCredits} ad credit{estimatedCredits > 1 ? 's' : ''}. You have {(user as any)?.adCredits ?? 0} available.
               </Text>
             </View>
           )}
@@ -621,166 +544,76 @@ export default function AddScreen() {
 
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Weight (Carats)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. 2.45"
-              keyboardType="numeric"
-              value={weightCarats}
-              onChangeText={setWeightCarats}
-            />
+            <TextInput style={styles.input} placeholder="e.g. 2.45" keyboardType="numeric" value={weightCarats} onChangeText={setWeightCarats} />
           </View>
 
           <FieldSelector label="Color" value={color} placeholder="Select color" onPress={() => setActivePicker('color')} />
           {color === 'Other' && (
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>Custom Color</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter color"
-                value={customColor}
-                onChangeText={setCustomColor}
-              />
+              <TextInput style={styles.input} placeholder="Enter color" value={customColor} onChangeText={setCustomColor} />
             </View>
           )}
 
           <FieldSelector label="Shape & Cut" value={shape} placeholder="Select shape" onPress={() => setActivePicker('shape')} />
+          <FieldSelector label="Origin" value={origin} placeholder="Select origin" onPress={() => setActivePicker('origin')} />
+          <FieldSelector label="Clarity" value={clarity} placeholder="Select clarity grade" onPress={() => setActivePicker('clarity')} />
 
-          <FieldSelector
-            label="Treatment Status"
-            value={treatment}
-            placeholder="Select treatment status"
-            onPress={() => setActivePicker('treatment')}
-          />
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Dimensions (Optional in mm)</Text>
+            <View style={styles.dimensionsRow}>
+              <TextInput style={[styles.input, styles.dimInput]} placeholder="L" keyboardType="numeric" value={dimLength} onChangeText={setDimLength} />
+              <Text style={styles.dimDivider}>×</Text>
+              <TextInput style={[styles.input, styles.dimInput]} placeholder="W" keyboardType="numeric" value={dimWidth} onChangeText={setDimWidth} />
+              <Text style={styles.dimDivider}>×</Text>
+              <TextInput style={[styles.input, styles.dimInput]} placeholder="D" keyboardType="numeric" value={dimDepth} onChangeText={setDimDepth} />
+            </View>
+          </View>
 
-          <FieldSelector
-            label="Certification Status"
-            value={certificationStatus}
-            placeholder="Select certification status"
-            onPress={() => setActivePicker('certification')}
-          />
+          <FieldSelector label="Treatment Status" value={treatment} placeholder="Select treatment status" onPress={() => setActivePicker('treatment')} />
+          <FieldSelector label="Certification Status" value={certificationStatus} placeholder="Select certification status" onPress={() => setActivePicker('certification')} />
           {certificationStatus === 'Certified' && (
             <FieldSelector label="Certifying Lab" value={labName} placeholder="Select lab" onPress={() => setActivePicker('lab')} />
           )}
         </View>
 
-        {/* DESCRIPTION */}
+        {/* DESCRIPTION & LOCATION */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Description</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Describe clarity, origin (e.g. Ceylon, Madagascar), or unique features..."
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={5}
-          />
+          <TextInput style={[styles.input, styles.textArea]} placeholder="Describe unique features..." value={description} onChangeText={setDescription} multiline numberOfLines={5} />
         </View>
 
-        {/* LOCATION & CONTACT */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Location & Contact</Text>
-
           <FieldSelector label="Province" value={province} placeholder="Select province" onPress={() => setActivePicker('province')} />
-          <FieldSelector
-            label="City"
-            value={city}
-            placeholder={province ? 'Select city' : 'Select a province first'}
-            onPress={() => setActivePicker('city')}
-            disabled={!province}
-          />
-
+          <FieldSelector label="City" value={city} placeholder={province ? 'Select city' : 'Select a province first'} onPress={() => setActivePicker('city')} disabled={!province} />
           {!hidePhoneNumber && (
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>Contact Phone</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Phone number"
-                keyboardType="phone-pad"
-                value={contactPhone}
-                onChangeText={setContactPhone}
-              />
+              <TextInput style={styles.input} placeholder="Phone number" keyboardType="phone-pad" value={contactPhone} onChangeText={setContactPhone} />
             </View>
           )}
-
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Hide my phone number on this ad</Text>
-            <Switch
-              value={hidePhoneNumber}
-              onValueChange={setHidePhoneNumber}
-              trackColor={{ false: '#E2E8F0', true: '#93C5FD' }}
-              thumbColor={hidePhoneNumber ? '#2563EB' : '#F8FAFC'}
-            />
+            <Switch value={hidePhoneNumber} onValueChange={setHidePhoneNumber} trackColor={{ false: '#E2E8F0', true: '#93C5FD' }} thumbColor={hidePhoneNumber ? '#2563EB' : '#F8FAFC'} />
           </View>
         </View>
 
         <Pressable style={styles.submitButton} onPress={handleSubmit} disabled={submitting}>
-          {submitting ? (
-            <ActivityIndicator color="#FFF" />
-          ) : (
-            <Text style={styles.submitButtonText}>{isEditMode ? 'Save Changes' : 'Post Ad for Approval'}</Text>
-          )}
+          {submitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitButtonText}>{isEditMode ? 'Save Changes' : 'Post Ad for Approval'}</Text>}
         </Pressable>
       </ScrollView>
 
-      <SelectModal
-        visible={activePicker === 'category'}
-        title="Select Category"
-        options={GEM_CATEGORIES}
-        onSelect={setCategory}
-        onClose={() => setActivePicker('none')}
-      />
-      <SelectModal
-        visible={activePicker === 'color'}
-        title="Select Color"
-        options={GEM_COLORS}
-        onSelect={setColor}
-        onClose={() => setActivePicker('none')}
-      />
-      <SelectModal
-        visible={activePicker === 'shape'}
-        title="Select Shape & Cut"
-        options={GEM_SHAPES}
-        onSelect={setShape}
-        onClose={() => setActivePicker('none')}
-      />
-      <SelectModal
-        visible={activePicker === 'treatment'}
-        title="Select Treatment Status"
-        options={GEM_TREATMENTS}
-        onSelect={setTreatment}
-        onClose={() => setActivePicker('none')}
-      />
-      <SelectModal
-        visible={activePicker === 'certification'}
-        title="Select Certification Status"
-        options={CERTIFICATION_STATUSES}
-        onSelect={setCertificationStatus}
-        onClose={() => setActivePicker('none')}
-      />
-      <SelectModal
-        visible={activePicker === 'lab'}
-        title="Select Certifying Lab"
-        options={CERTIFICATION_LABS}
-        onSelect={setLabName}
-        onClose={() => setActivePicker('none')}
-      />
-      <SelectModal
-        visible={activePicker === 'province'}
-        title="Select Province"
-        options={PROVINCES}
-        onSelect={(value) => {
-          setProvince(value);
-          setCity('');
-        }}
-        onClose={() => setActivePicker('none')}
-      />
-      <SelectModal
-        visible={activePicker === 'city'}
-        title="Select City"
-        options={PROVINCE_CITY_MAP[province] || []}
-        onSelect={setCity}
-        onClose={() => setActivePicker('none')}
-      />
+      <SelectModal visible={activePicker === 'category'} title="Select Category" options={GEM_CATEGORIES} onSelect={setCategory} onClose={() => setActivePicker('none')} />
+      <SelectModal visible={activePicker === 'color'} title="Select Color" options={GEM_COLORS} onSelect={setColor} onClose={() => setActivePicker('none')} />
+      <SelectModal visible={activePicker === 'shape'} title="Select Shape & Cut" options={GEM_SHAPES} onSelect={setShape} onClose={() => setActivePicker('none')} />
+      <SelectModal visible={activePicker === 'origin'} title="Select Origin" options={GEM_ORIGINS} onSelect={setOrigin} onClose={() => setActivePicker('none')} />
+      <SelectModal visible={activePicker === 'clarity'} title="Select Clarity" options={GEM_CLARITIES} onSelect={setClarity} onClose={() => setActivePicker('none')} />
+      <SelectModal visible={activePicker === 'treatment'} title="Select Treatment Status" options={GEM_TREATMENTS} onSelect={setTreatment} onClose={() => setActivePicker('none')} />
+      <SelectModal visible={activePicker === 'certification'} title="Select Certification Status" options={CERTIFICATION_STATUSES} onSelect={setCertificationStatus} onClose={() => setActivePicker('none')} />
+      <SelectModal visible={activePicker === 'lab'} title="Select Certifying Lab" options={CERTIFICATION_LABS} onSelect={setLabName} onClose={() => setActivePicker('none')} />
+      <SelectModal visible={activePicker === 'province'} title="Select Province" options={PROVINCES} onSelect={(value) => { setProvince(value); setCity(''); }} onClose={() => setActivePicker('none')} />
+      <SelectModal visible={activePicker === 'city'} title="Select City" options={PROVINCE_CITY_MAP[province] || []} onSelect={setCity} onClose={() => setActivePicker('none')} />
     </SafeAreaView>
   );
 }
@@ -799,92 +632,32 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#64748B', marginBottom: 6 },
   input: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 12, fontSize: 15, color: '#0F172A' },
   textArea: { height: 110, textAlignVertical: 'top' },
-  dropdownSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-  },
+  dimensionsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dimInput: { flex: 1, textAlign: 'center' },
+  dimDivider: { fontSize: 18, color: '#94A3B8', marginHorizontal: 8 },
+  dropdownSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 14 },
   dropdownDisabled: { backgroundColor: '#F8FAFC' },
   dropdownSelectedText: { fontSize: 15, color: '#0F172A', fontWeight: '600' },
   dropdownPlaceholderText: { fontSize: 15, color: '#94A3B8' },
   imagesRow: { flexDirection: 'row', flexWrap: 'wrap' },
   imageThumbWrapper: { width: 84, height: 84, marginRight: 10, marginBottom: 10, position: 'relative' },
   imageThumb: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#E2E8F0' },
-  removeImageButton: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: '#EF4444',
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  addImageTile: {
-    width: 84,
-    height: 84,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-  },
+  removeImageButton: { position: 'absolute', top: -6, right: -6, backgroundColor: '#EF4444', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
+  addImageTile: { width: 84, height: 84, borderRadius: 12, borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' },
   addImageText: { fontSize: 11, color: '#94A3B8', marginTop: 4, fontWeight: '500' },
-  certUploadBox: {
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    borderStyle: 'dashed',
-    borderRadius: 16,
-    height: 140,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-    overflow: 'hidden',
-  },
+  certUploadBox: { borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed', borderRadius: 16, height: 140, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC', overflow: 'hidden' },
   certPreviewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   uploadText: { marginTop: 10, color: '#64748B', fontSize: 13, fontWeight: '500' },
   removeCertText: { color: '#EF4444', fontSize: 13, fontWeight: '600', marginTop: 10, textAlign: 'center' },
   currencyToggleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  currencyOption: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginRight: 8,
-  },
+  currencyOption: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, marginRight: 8 },
   currencyOptionActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
   currencyOptionText: { fontSize: 14, fontWeight: '700', color: '#64748B' },
   currencyOptionTextActive: { color: '#FFFFFF' },
-  priceInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 15,
-    color: '#0F172A',
-  },
+  priceInput: { flex: 1, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, fontSize: 15, color: '#0F172A' },
   checkboxRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   checkboxLabel: { marginLeft: 8, fontSize: 14, color: '#334155', fontWeight: '500' },
-  creditsEstimateBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#EFF6FF',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 14,
-  },
+  creditsEstimateBox: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#EFF6FF', borderRadius: 12, padding: 12, marginTop: 14 },
   creditsEstimateText: { flex: 1, marginLeft: 8, fontSize: 13, color: '#1D4ED8', lineHeight: 18 },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   switchLabel: { flex: 1, fontSize: 14, color: '#334155', fontWeight: '500', marginRight: 12 },

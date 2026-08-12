@@ -31,6 +31,9 @@ type GemAdDetails = {
   weightCarats: number;
   color: string;
   shape: string;
+  origin: string;
+  clarity: string;
+  dimensions: { length: number; width: number; depth: number };
   treatment: string;
   certification: { status: string; labName: string };
   description: string;
@@ -100,7 +103,7 @@ export default function GemDetailsScreen() {
         setIsFavorited(data.gemAdIds.includes(id));
       }
     } catch {
-      // Silently ignore - heart just won't reflect saved state this cycle
+      // Silently ignore
     }
   }, [id, userToken]);
 
@@ -126,9 +129,7 @@ export default function GemDetailsScreen() {
         headers: { Authorization: `Bearer ${userToken}` },
       });
       const data = await res.json();
-      if (!data.success) {
-        setIsFavorited(wasFavorited);
-      }
+      if (!data.success) setIsFavorited(wasFavorited);
     } catch {
       setIsFavorited(wasFavorited);
     } finally {
@@ -136,19 +137,27 @@ export default function GemDetailsScreen() {
     }
   };
 
-  const openWhatsApp = () => {
+ const openWhatsApp = () => {
     if (!ad?.user?.whatsappNumber) return;
+    
+    // Clean the phone number
     const fullNumber = `${ad.user.whatsappCountryCode || ''}${ad.user.whatsappNumber}`.replace(/\D/g, '');
-    Linking.openURL(`https://wa.me/${fullNumber}`).catch(() =>
+    
+    // Create the default message string
+    const message = `Hello! I saw your ad on Manik: "${ad.title}" for ${formatPrice(ad.price)}. Is this still available?`;
+    
+    // Encode the message so it works safely in a URL (handles spaces, symbols, etc.)
+    const encodedMessage = encodeURIComponent(message);
+
+    // Append the encoded message to the WhatsApp link using ?text=
+    Linking.openURL(`https://wa.me/${fullNumber}?text=${encodedMessage}`).catch(() => 
       Alert.alert('Error', 'Could not open WhatsApp.')
     );
   };
 
   const callSeller = () => {
     if (!ad?.contactPhone) return;
-    Linking.openURL(`tel:${ad.contactPhone}`).catch(() =>
-      Alert.alert('Error', 'Could not start the call.')
-    );
+    Linking.openURL(`tel:${ad.contactPhone}`).catch(() => Alert.alert('Error', 'Could not start the call.'));
   };
 
   if (loading || !ad) {
@@ -175,9 +184,7 @@ export default function GemDetailsScreen() {
               const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
               setActiveImageIndex(index);
             }}
-            renderItem={({ item }) => (
-              <Image source={{ uri: item.url }} style={styles.carouselImage} />
-            )}
+            renderItem={({ item }) => <Image source={{ uri: item.url }} style={styles.carouselImage} />}
           />
 
           <Pressable style={styles.backButton} onPress={() => router.back()}>
@@ -185,20 +192,13 @@ export default function GemDetailsScreen() {
           </Pressable>
 
           <Pressable style={styles.favoriteButton} onPress={toggleFavorite} disabled={favoriteLoading}>
-            <Ionicons
-              name={isFavorited ? 'heart' : 'heart-outline'}
-              size={20}
-              color={isFavorited ? '#EF4444' : '#0F172A'}
-            />
+            <Ionicons name={isFavorited ? 'heart' : 'heart-outline'} size={20} color={isFavorited ? '#EF4444' : '#0F172A'} />
           </Pressable>
 
           {ad.images.length > 1 && (
             <View style={styles.dotsRow}>
               {ad.images.map((_, index) => (
-                <View
-                  key={index}
-                  style={[styles.dot, index === activeImageIndex && styles.dotActive]}
-                />
+                <View key={index} style={[styles.dot, index === activeImageIndex && styles.dotActive]} />
               ))}
             </View>
           )}
@@ -219,7 +219,6 @@ export default function GemDetailsScreen() {
             <Text style={styles.locationText}>{ad.location.city}, {ad.location.province}</Text>
           </View>
 
-          {/* SPECIFICATIONS */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Specifications</Text>
             <View style={styles.specRow}>
@@ -231,20 +230,37 @@ export default function GemDetailsScreen() {
               <Text style={styles.specValue}>{ad.shape}</Text>
             </View>
             <View style={styles.specRow}>
+              <Text style={styles.specLabel}>Origin</Text>
+              <Text style={styles.specValue}>{ad.origin || 'Not specified'}</Text>
+            </View>
+            <View style={styles.specRow}>
+              <Text style={styles.specLabel}>Clarity</Text>
+              <Text style={styles.specValue}>{ad.clarity || 'Not specified'}</Text>
+            </View>
+            
+            {ad.dimensions && (ad.dimensions.length > 0 || ad.dimensions.width > 0) && (
+              <View style={styles.specRow}>
+                <Text style={styles.specLabel}>Dimensions</Text>
+                <Text style={styles.specValue}>
+                  {ad.dimensions.length} x {ad.dimensions.width} x {ad.dimensions.depth} mm
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.specRow}>
               <Text style={styles.specLabel}>Treatment</Text>
               <Text style={styles.specValue}>{ad.treatment}</Text>
             </View>
             <View style={[styles.specRow, { borderBottomWidth: 0 }]}>
               <Text style={styles.specLabel}>Certification</Text>
               <Text style={styles.specValue}>
-                {ad.certification.status === 'Certified'
+                {ad.certification?.status === 'Certified'
                   ? `Certified (${ad.certification.labName})`
                   : 'Not Certified'}
               </Text>
             </View>
           </View>
 
-          {/* CERTIFICATE IMAGE */}
           {ad.certificateImage && (
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Gemological Certificate</Text>
@@ -252,7 +268,6 @@ export default function GemDetailsScreen() {
             </View>
           )}
 
-          {/* DESCRIPTION */}
           {!!ad.description && (
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Description</Text>
@@ -260,20 +275,19 @@ export default function GemDetailsScreen() {
             </View>
           )}
 
-          {/* SELLER */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Seller</Text>
             <View style={styles.sellerRow}>
-              {ad.user.profileImage ? (
+              {ad.user?.profileImage ? (
                 <Image source={{ uri: ad.user.profileImage }} style={styles.sellerAvatar} />
               ) : (
                 <Ionicons name="person-circle" size={44} color="#2563EB" />
               )}
-              <Text style={styles.sellerName}>{ad.user.name}</Text>
+              <Text style={styles.sellerName}>{ad.user?.name || 'Manik Seller'}</Text>
             </View>
 
             <View style={styles.contactButtonsRow}>
-              {ad.user.whatsappNumber ? (
+              {ad.user?.whatsappNumber ? (
                 <Pressable style={styles.whatsappButton} onPress={openWhatsApp}>
                   <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" />
                   <Text style={styles.contactButtonText}>WhatsApp</Text>
@@ -287,7 +301,7 @@ export default function GemDetailsScreen() {
                 </Pressable>
               ) : null}
 
-              {!ad.user.whatsappNumber && (ad.hidePhoneNumber || !ad.contactPhone) && (
+              {(!ad.user?.whatsappNumber && (ad.hidePhoneNumber || !ad.contactPhone)) && (
                 <Text style={styles.noContactText}>This seller has not shared contact details.</Text>
               )}
             </View>
@@ -307,41 +321,10 @@ const styles = StyleSheet.create({
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   imageCarouselWrapper: { position: 'relative' },
   carouselImage: { width: SCREEN_WIDTH, height: 320, backgroundColor: '#E2E8F0' },
-  backButton: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  favoriteButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dotsRow: {
-    position: 'absolute',
-    bottom: 14,
-    alignSelf: 'center',
-    flexDirection: 'row',
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    marginHorizontal: 3,
-  },
+  backButton: { position: 'absolute', top: 16, left: 16, width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' },
+  favoriteButton: { position: 'absolute', top: 16, right: 16, width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' },
+  dotsRow: { position: 'absolute', bottom: 14, alignSelf: 'center', flexDirection: 'row' },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.6)', marginHorizontal: 3 },
   dotActive: { backgroundColor: '#FFFFFF', width: 16 },
   content: { padding: 22 },
   title: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
@@ -353,38 +336,17 @@ const styles = StyleSheet.create({
   locationText: { fontSize: 13, color: '#94A3B8', marginLeft: 4 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, elevation: 2, marginTop: 18 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
-  specRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
+  specRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   specLabel: { fontSize: 13, color: '#64748B', fontWeight: '500' },
-  specValue: { fontSize: 13, color: '#0F172A', fontWeight: '700' },
+  specValue: { fontSize: 13, color: '#0F172A', fontWeight: '700', textAlign: 'right', flex: 1, paddingLeft: 10 },
   certificateImage: { width: '100%', height: 180, borderRadius: 12, backgroundColor: '#E2E8F0' },
   descriptionText: { fontSize: 14, color: '#334155', lineHeight: 21 },
   sellerRow: { flexDirection: 'row', alignItems: 'center' },
   sellerAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E2E8F0' },
   sellerName: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginLeft: 12 },
   contactButtonsRow: { flexDirection: 'row', marginTop: 16 },
-  whatsappButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#10B981',
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderRadius: 12,
-    marginRight: 10,
-  },
-  callButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderRadius: 12,
-  },
+  whatsappButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12, marginRight: 10 },
+  callButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2563EB', paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12 },
   contactButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13, marginLeft: 6 },
   noContactText: { fontSize: 13, color: '#94A3B8', fontStyle: 'italic' },
   postedDate: { fontSize: 12, color: '#94A3B8', textAlign: 'center', marginTop: 20 },

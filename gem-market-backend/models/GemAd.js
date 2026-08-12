@@ -1,5 +1,3 @@
-//gemAd.js
-
 const mongoose = require('mongoose');
 
 const imageSchema = new mongoose.Schema(
@@ -24,17 +22,6 @@ const gemAdSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: [
-        'Blue Sapphire',
-        'Ruby',
-        'Emerald',
-        'Padparadscha',
-        'Spinel',
-        'Tsavorite',
-        'Tourmaline',
-        'Rough / Uncut Gem',
-        'Other',
-      ],
       required: true,
     },
     price: {
@@ -54,12 +41,23 @@ const gemAdSchema = new mongoose.Schema(
     },
     shape: {
       type: String,
-      enum: ['Oval', 'Cushion', 'Round', 'Emerald Cut', 'Cabochon', 'Rough (Uncut)', 'Other'],
       required: true,
+    },
+    origin: {
+      type: String,
+      required: true,
+    },
+    clarity: {
+      type: String,
+      required: true,
+    },
+    dimensions: {
+      length: { type: Number, default: 0 },
+      width: { type: Number, default: 0 },
+      depth: { type: Number, default: 0 },
     },
     treatment: {
       type: String,
-      enum: ['Unheated / 100% Natural', 'Heated (Standard)', 'Beryllium Treated', 'Glass Filled'],
       required: true,
     },
     certification: {

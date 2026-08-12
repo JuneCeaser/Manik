@@ -1,13 +1,51 @@
 export const GEM_CATEGORIES = [
   'Blue Sapphire',
+  'Yellow Sapphire',
+  'Pink Sapphire',
+  'White Sapphire',
+  'Star Sapphire',
   'Ruby',
-  'Emerald',
+  'Star Ruby',
   'Padparadscha',
+  'Emerald',
   'Spinel',
   'Tsavorite',
   'Tourmaline',
+  'Alexandrite',
+  "Cat's Eye (Chrysoberyl)",
+  'Garnet',
+  'Moonstone',
+  'Amethyst',
+  'Citrine',
+  'Topaz',
+  'Zircon',
+  'Aquamarine',
+  'Peridot',
+  'Tanzanite',
+  'Opal',
   'Rough / Uncut Gem',
   'Other',
+];
+
+export const GEM_ORIGINS = [
+  'Ceylon (Sri Lanka)',
+  'Madagascar',
+  'Burma (Myanmar)',
+  'Mozambique',
+  'Tanzania',
+  'Zambia',
+  'Brazil',
+  'Colombia',
+  'Afghanistan',
+  'Other',
+];
+
+export const GEM_CLARITIES = [
+  'VVS / Loupe Clean',
+  'VS / Eye Clean',
+  'SI / Slightly Included',
+  'I / Included',
+  'Opaque / Cabochon Grade',
 ];
 
 export const GEM_COLORS = [
@@ -44,8 +82,6 @@ export const CERTIFICATION_STATUSES = ['Certified', 'Not Certified'];
 
 export const CERTIFICATION_LABS = ['GIA', 'GRS', 'CGL', 'AIGS', 'IGI', 'Other'];
 
-// Province -> City options. Keys must match the backend's
-// SRI_LANKA_PROVINCES list exactly (see authController.js).
 export const PROVINCE_CITY_MAP: Record<string, string[]> = {
   Western: ['Colombo', 'Dehiwala-Mount Lavinia', 'Moratuwa', 'Negombo', 'Gampaha', 'Kalutara', 'Panadura', 'Ja-Ela'],
   Central: ['Kandy', 'Matale', 'Nuwara Eliya', 'Gampola', 'Nawalapitiya', 'Hatton'],
@@ -60,8 +96,6 @@ export const PROVINCE_CITY_MAP: Record<string, string[]> = {
 
 export const PROVINCES = Object.keys(PROVINCE_CITY_MAP);
 
-// Rough client-side estimate only — the backend re-checks the exact credit
-// cost on submit using its own exchange rate (USD_TO_LKR_RATE env var).
 const USD_TO_LKR_ESTIMATE = 300;
 
 export const getEstimatedRequiredCredits = (amount: number, currency: 'LKR' | 'USD') => {
