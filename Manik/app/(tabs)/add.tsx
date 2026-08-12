@@ -219,6 +219,7 @@ export default function AddScreen() {
     };
 
     loadAd();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId, isEditMode]);
 
   const pickImages = async () => {
