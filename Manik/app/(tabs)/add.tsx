@@ -128,19 +128,16 @@ export default function AddScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEditMode);
 
-  // Updated Image State tracking fileId references for direct client uploads
   const [images, setImages] = useState<AppImage[]>([]);
   const [certificateImage, setCertificateImage] = useState<AppImage | null>(null);
   const [originalCertificateUrl, setOriginalCertificateUrl] = useState<string | null>(null);
 
-  // Core details
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
   const [priceAmount, setPriceAmount] = useState('');
   const [currency, setCurrency] = useState<'LKR' | 'USD'>('LKR');
   const [negotiable, setNegotiable] = useState(false);
 
-  // Specifications
   const [weightCarats, setWeightCarats] = useState('');
   const [color, setColor] = useState('');
   const [customColor, setCustomColor] = useState('');
@@ -149,16 +146,13 @@ export default function AddScreen() {
   const [certificationStatus, setCertificationStatus] = useState('Not Certified');
   const [labName, setLabName] = useState('');
 
-  // Description
   const [description, setDescription] = useState('');
 
-  // Location & contact
   const [province, setProvince] = useState((user as any)?.province || '');
   const [city, setCity] = useState((user as any)?.city || '');
   const [contactPhone, setContactPhone] = useState((user as any)?.phone || '');
   const [hidePhoneNumber, setHidePhoneNumber] = useState(false);
 
-  // Load existing ad data when editing
   useEffect(() => {
     if (!isEditMode) {
       setInitialLoading(false);
@@ -248,7 +242,7 @@ export default function AddScreen() {
     if (!result.canceled) {
       const newImages: AppImage[] = result.assets
         .map((a) => ({
-          url: a.uri, // Use the local file URI temporarily
+          url: a.uri, 
           fileId: '',
           isNew: true,
         }));
@@ -274,7 +268,7 @@ export default function AddScreen() {
 
     if (!result.canceled) {
       setCertificateImage({
-        url: result.assets[0].uri, // Use the local file URI temporarily
+        url: result.assets[0].uri, 
         fileId: '',
         isNew: true,
       });
@@ -329,32 +323,35 @@ export default function AddScreen() {
 
     setSubmitting(true);
     try {
-      // 1. Fetch Secure Upload Signature from backend
-      const authRes = await fetch(`${GEMS_URL}/imagekit-auth`, {
-        headers: { Authorization: `Bearer ${userToken}` },
-      });
-      const authData = await authRes.json();
-
-      if (!authData.success) {
-        setSubmitting(false);
-        return Alert.alert('Server Error', 'Failed to connect to image provider auth.');
-      }
-
-      // Reusable memory-safe direct-upload function straight to ImageKit CDN
       const uploadToImageKit = async (fileUri: string, folder: string) => {
+        const authRes = await fetch(`${GEMS_URL}/imagekit-auth?t=${Date.now()}${Math.random()}`, {
+          headers: { 
+            Authorization: `Bearer ${userToken}`,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          },
+        });
+        const authData = await authRes.json();
+
+        if (!authData.success) {
+          throw new Error('Failed to get upload signature.');
+        }
+
         const formData = new FormData();
+        const generatedFileName = `gem_${Date.now()}_${Math.floor(Math.random() * 1000)}.jpg`;
         
         formData.append('file', {
           uri: fileUri,
-          name: `gem_${Date.now()}.jpg`,
+          name: generatedFileName,
           type: 'image/jpeg',
         } as any);
 
+        // --- FIX: Added the missing fileName parameter back! ---
+        formData.append('fileName', generatedFileName); 
         formData.append('publicKey', authData.publicKey);
         formData.append('signature', authData.signature);
         formData.append('expire', String(authData.expire));
         formData.append('token', authData.token);
-        formData.append('fileName', `gem_${Date.now()}.jpg`);
         formData.append('folder', folder);
 
         const res = await fetch('https://upload.imagekit.io/api/v1/files/upload', { 
@@ -371,7 +368,6 @@ export default function AddScreen() {
         return await res.json();
       };
 
-      // 2. Upload Only New Images directly using the local URI
       const finalImages = [];
       for (const img of images) {
         if (img.isNew && img.url) {
@@ -382,7 +378,6 @@ export default function AddScreen() {
         }
       }
 
-      // 3. Upload New Certificate (if modified)
       let finalCertificate = certificateImage && !certificateImage.isNew ? { url: certificateImage.url, fileId: certificateImage.fileId } : null;
       if (certificateImage && certificateImage.isNew && certificateImage.url) {
         const uploaded = await uploadToImageKit(certificateImage.url, '/gem_certificates');
