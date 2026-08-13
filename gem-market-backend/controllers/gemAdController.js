@@ -83,6 +83,7 @@ exports.createGemAd = async (req, res) => {
       hidePhoneNumber: !!hidePhoneNumber,
       status: 'PENDING',
       creditsUsed: requiredCredits,
+      bumpedAt: Date.now(), // Sets initial bump to creation time
     });
 
     user.adCredits -= requiredCredits;
@@ -97,7 +98,8 @@ exports.createGemAd = async (req, res) => {
 
 exports.getMyGemAds = async (req, res) => {
   try {
-    const gemAds = await GemAd.find({ user: req.user._id }).sort({ createdAt: -1 });
+    // Sorts by bumpedAt so pushed/edited ads jump to the top of "My Ads"
+    const gemAds = await GemAd.find({ user: req.user._id }).sort({ bumpedAt: -1, createdAt: -1 });
     return res.json({ success: true, gemAds });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Could not fetch your ads.' });
@@ -128,16 +130,19 @@ exports.getPublishedGemAds = async (req, res) => {
 
     let query = { status: 'APPROVED' };
 
+    // Filter by exact category match if provided
     if (category && category !== 'All') {
       query.category = category;
     }
 
+    // Sort by bumpedAt so pushed ads jump to the top of the market
     const gemAds = await GemAd.find(query)
       .populate('user', 'name')
-      .sort({ createdAt: -1 });
+      .sort({ bumpedAt: -1, createdAt: -1 });
 
     let filteredAds = gemAds;
 
+    // Cross-currency price filter logic
     if (!isNaN(minPrice) || !isNaN(maxPrice)) {
       filteredAds = filteredAds.filter(ad => {
         let adAmountInPref = ad.price.amount;
@@ -172,6 +177,32 @@ exports.getPublicGemAdById = async (req, res) => {
     return res.json({ success: true, gemAd });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Could not fetch ad details.' });
+  }
+};
+
+// NEW LOGIC TO DEDUCT CREDIT AND PUSH AD
+exports.pushGemAd = async (req, res) => {
+  try {
+    const gemAd = await GemAd.findOne({ _id: req.params.id, user: req.user._id });
+    if (!gemAd) return res.status(404).json({ success: false, message: 'Ad not found.' });
+    if (gemAd.status !== 'APPROVED') return res.status(400).json({ success: false, message: 'Only published ads can be pushed.' });
+
+    const user = await User.findById(req.user._id);
+    if (user.adCredits < 1) {
+      return res.status(402).json({ success: false, code: 'INSUFFICIENT_CREDITS', message: 'You need at least 1 ad credit to push an ad.' });
+    }
+
+    // Deduct 1 credit
+    user.adCredits -= 1;
+    await user.save();
+
+    // Bump the ad
+    gemAd.bumpedAt = Date.now();
+    await gemAd.save();
+
+    return res.json({ success: true, message: 'Ad successfully pushed to the front!', user });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Could not push ad.' });
   }
 };
 
@@ -233,6 +264,7 @@ exports.updateGemAd = async (req, res) => {
     }
 
     gemAd.status = 'PENDING';
+    gemAd.bumpedAt = Date.now(); // Updating an ad also resets its position
     await gemAd.save();
 
     return res.json({ success: true, message: 'Ad updated and resubmitted.', gemAd });

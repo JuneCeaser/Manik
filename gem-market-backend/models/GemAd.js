@@ -102,6 +102,11 @@ const gemAdSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    // NEW FIELD FOR PUSHING ADS
+    bumpedAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
   { timestamps: true }
 );

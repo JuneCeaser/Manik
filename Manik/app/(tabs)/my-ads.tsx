@@ -39,7 +39,7 @@ const formatPrice = (price: MyGemAd['price']) => {
 };
 
 export default function MyAdsScreen() {
-  const { userToken, logout } = useAuth();
+  const { user, userToken, logout, loginState } = useAuth();
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
@@ -48,7 +48,9 @@ export default function MyAdsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'PENDING' | 'APPROVED'>('PENDING');
+  
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pushingId, setPushingId] = useState<string | null>(null);
 
   const fetchMyAds = useCallback(async () => {
     if (!userToken) return;
@@ -124,6 +126,61 @@ export default function MyAdsScreen() {
     );
   };
 
+  const performPush = async (adId: string) => {
+    setPushingId(adId);
+    try {
+      const res = await fetch(`${GEMS_URL}/${adId}/push`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${userToken}` },
+      });
+      const data = await res.json();
+
+      if (res.status === 401) {
+        Alert.alert('Session Expired', 'Please log in again.');
+        logout();
+        return;
+      }
+
+      if (data.success) {
+        // Update user context with new credit balance
+        await loginState(userToken!, data.user);
+        Alert.alert('Ad Pushed!', 'Your ad has been moved to the top of the market.');
+        fetchMyAds(); // Refresh the list
+      } else if (res.status === 402 || data.code === 'INSUFFICIENT_CREDITS') {
+        Alert.alert('Not Enough Ad Credits', data.message, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Get Credits', onPress: () => router.push('/subscription') },
+        ]);
+      } else {
+        Alert.alert('Error', data.message || 'Could not push ad.');
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to connect to the server.');
+    } finally {
+      setPushingId(null);
+    }
+  };
+
+  const handlePush = (adId: string, title: string) => {
+    const credits = (user as any)?.adCredits || 0;
+    if (credits < 1) {
+      Alert.alert('Not Enough Ad Credits', 'You need 1 ad credit to push your ad to the front.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Get Credits', onPress: () => router.push('/subscription') },
+      ]);
+      return;
+    }
+
+    Alert.alert(
+      'Push Ad to Front',
+      `Pushing "${title}" will cost 1 Ad Credit.\n\nYou currently have ${credits} credits left. Proceed?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Push', onPress: () => performPush(adId) },
+      ]
+    );
+  };
+
   const handleEdit = (adId: string) => {
     router.push(`/add?editId=${adId}`);
   };
@@ -158,10 +215,29 @@ export default function MyAdsScreen() {
 
         {item.status === 'APPROVED' && (
           <View style={styles.actionRow}>
+            {/* PUSH BUTTON */}
+            <Pressable
+              style={styles.pushButton}
+              onPress={() => handlePush(item._id, item.title)}
+              disabled={pushingId === item._id}
+            >
+              {pushingId === item._id ? (
+                <ActivityIndicator size="small" color="#F59E0B" />
+              ) : (
+                <>
+                  <Ionicons name="arrow-up-circle-outline" size={14} color="#F59E0B" />
+                  <Text style={styles.pushButtonText}>Push</Text>
+                </>
+              )}
+            </Pressable>
+
+            {/* EDIT BUTTON */}
             <Pressable style={styles.editButton} onPress={() => handleEdit(item._id)}>
               <Ionicons name="pencil-outline" size={14} color={colors.primary} />
               <Text style={styles.editButtonText}>Edit</Text>
             </Pressable>
+
+            {/* DELETE BUTTON */}
             <Pressable
               style={styles.deleteButton}
               onPress={() => handleDelete(item._id, item.title)}
@@ -265,9 +341,11 @@ const createStyles = (colors: any) => StyleSheet.create({
   cardPrice: { fontSize: 14, fontWeight: '700', color: colors.primary, marginTop: 6 },
   cardMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
   cardDate: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
-  actionRow: { flexDirection: 'row', marginTop: 10 },
-  editButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.inputBg, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, marginRight: 8 },
+  actionRow: { flexDirection: 'row', marginTop: 10, flexWrap: 'wrap' },
+  pushButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, marginRight: 8, marginBottom: 6 },
+  pushButtonText: { fontSize: 12, fontWeight: '700', color: '#F59E0B', marginLeft: 4 },
+  editButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.inputBg, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, marginRight: 8, marginBottom: 6 },
   editButtonText: { fontSize: 12, fontWeight: '700', color: colors.primary, marginLeft: 4 },
-  deleteButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.inputBg, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 },
+  deleteButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.inputBg, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, marginBottom: 6 },
   deleteButtonText: { fontSize: 12, fontWeight: '700', color: colors.danger, marginLeft: 4 },
 });
