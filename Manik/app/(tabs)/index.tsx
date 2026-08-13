@@ -8,6 +8,7 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -16,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../constants/api';
+import { formatDisplayPrice } from '../../utils/currency';
+import { GEM_CATEGORIES } from '../../constants/gemOptions';
 
 const GEMS_URL = `${API_BASE_URL.replace('/auth', '')}/gems`;
 const FAVORITES_URL = `${API_BASE_URL.replace('/auth', '')}/favorites`;
@@ -32,13 +35,10 @@ type PublishedGemAd = {
   user: { name: string };
 };
 
-const formatPrice = (price: PublishedGemAd['price']) => {
-  const symbol = price.currency === 'USD' ? '$' : 'Rs.';
-  return `${symbol} ${price.amount.toLocaleString()}${price.negotiable ? ' (Neg.)' : ''}`;
-};
+const filterCategories = ['All', ...GEM_CATEGORIES];
 
 export default function HomeScreen() {
-  const { userToken } = useAuth();
+  const { userToken, preferredCurrency, exchangeRate } = useAuth();
   const router = useRouter();
   
   const [ads, setAds] = useState<PublishedGemAd[]>([]);
@@ -46,7 +46,12 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
-  // Pagination states added here
+  // Filter States
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+
+  // Pagination states
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -56,27 +61,32 @@ export default function HomeScreen() {
     else setLoadingMore(true);
 
     try {
-      const res = await fetch(`${GEMS_URL}/published?page=${pageNumber}&limit=20`, {
+      let url = `${GEMS_URL}/published?page=${pageNumber}&limit=20&currency=${preferredCurrency}&rate=${exchangeRate}`;
+      if (selectedCategory && selectedCategory !== 'All') url += `&category=${encodeURIComponent(selectedCategory)}`;
+      if (minPrice) url += `&minPrice=${minPrice}`;
+      if (maxPrice) url += `&maxPrice=${maxPrice}`;
+
+      const res = await fetch(url, {
         headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
       });
       const data = await res.json();
       
       if (data.success) {
         if (pageNumber === 1) {
-          setAds(data.gemAds); // Replace entirely if it's the first page
+          setAds(data.gemAds); 
         } else {
-          setAds((prev) => [...prev, ...data.gemAds]); // Attach to the bottom if scrolling
+          setAds((prev) => [...prev, ...data.gemAds]); 
         }
         setHasMore(data.hasMore);
         setPage(pageNumber);
       }
     } catch {
-      // Silently fail - the empty state will show
+      // Silently fail
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [userToken]);
+  }, [userToken, selectedCategory, minPrice, maxPrice, preferredCurrency, exchangeRate]);
 
   const fetchFavoriteIds = useCallback(async () => {
     if (!userToken) {
@@ -98,7 +108,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchAds(1);
-  }, [fetchAds]);
+  }, [fetchAds, selectedCategory]); 
 
   useFocusEffect(
     useCallback(() => {
@@ -108,16 +118,18 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // When pulling down to refresh, force it to fetch Page 1 again
     await Promise.all([fetchAds(1), fetchFavoriteIds()]);
     setRefreshing(false);
   }, [fetchAds, fetchFavoriteIds]);
 
-  // Triggered when scrolling near the bottom
   const loadMoreAds = () => {
     if (!loadingMore && hasMore) {
       fetchAds(page + 1);
     }
+  };
+
+  const applyPriceFilter = () => {
+    fetchAds(1);
   };
 
   const toggleFavorite = async (adId: string) => {
@@ -158,6 +170,17 @@ export default function HomeScreen() {
     }
   };
 
+  const renderCategoryItem = ({ item }: { item: string }) => (
+    <Pressable
+      style={[styles.categoryPill, selectedCategory === item && styles.categoryPillActive]}
+      onPress={() => setSelectedCategory(item)}
+    >
+      <Text style={[styles.categoryText, selectedCategory === item && styles.categoryTextActive]}>
+        {item}
+      </Text>
+    </Pressable>
+  );
+
   const renderItem = ({ item }: { item: PublishedGemAd }) => {
     const isFavorited = favoriteIds.has(item._id);
     return (
@@ -177,7 +200,7 @@ export default function HomeScreen() {
         </View>
         <View style={styles.cardBody}>
           <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.cardPrice}>{formatPrice(item.price)}</Text>
+          <Text style={styles.cardPrice}>{formatDisplayPrice(item.price, preferredCurrency, exchangeRate)}</Text>
           <View style={styles.cardMetaRow}>
             <Text style={styles.cardMeta} numberOfLines={1}>{item.category}</Text>
             <Text style={styles.cardMetaDot}>•</Text>
@@ -197,6 +220,39 @@ export default function HomeScreen() {
       <StatusBar style="dark" />
       <Text style={styles.headerTitle}>Manik Gem Market</Text>
 
+      <View style={styles.filterSection}>
+        <FlatList
+          data={filterCategories}
+          keyExtractor={(item) => item}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryList}
+          renderItem={renderCategoryItem}
+        />
+        <View style={styles.priceFilterRow}>
+          <TextInput
+            style={styles.priceInput}
+            placeholder={`Min Price (${preferredCurrency})`}
+            placeholderTextColor="#94A3B8"
+            keyboardType="numeric"
+            value={minPrice}
+            onChangeText={setMinPrice}
+          />
+          <Text style={styles.priceDivider}>-</Text>
+          <TextInput
+            style={styles.priceInput}
+            placeholder={`Max Price (${preferredCurrency})`}
+            placeholderTextColor="#94A3B8"
+            keyboardType="numeric"
+            value={maxPrice}
+            onChangeText={setMaxPrice}
+          />
+          <Pressable style={styles.applyFilterButton} onPress={applyPriceFilter}>
+            <Ionicons name="search" size={18} color="#FFFFFF" />
+          </Pressable>
+        </View>
+      </View>
+
       {loading && page === 1 ? (
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#2563EB" />
@@ -210,20 +266,17 @@ export default function HomeScreen() {
           columnWrapperStyle={styles.row}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
-          
-          // Pagination triggers added here
           onEndReached={loadMoreAds}
-          onEndReachedThreshold={0.5} // Triggers when the user is halfway down the current list
+          onEndReachedThreshold={0.5}
           ListFooterComponent={
             loadingMore ? (
               <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 20 }} />
             ) : null
           }
-
           ListEmptyComponent={
             <View style={styles.centerContent}>
               <Ionicons name="diamond-outline" size={48} color="#CBD5E1" />
-              <Text style={styles.emptyText}>No gems listed yet.</Text>
+              <Text style={styles.emptyText}>No gems match your filters.</Text>
             </View>
           }
         />
@@ -234,32 +287,25 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A', paddingHorizontal: 22, paddingTop: 12, paddingBottom: 8 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  filterSection: { paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  categoryList: { paddingHorizontal: 16, paddingVertical: 10 },
+  categoryPill: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F1F5F9', borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  categoryPillActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+  categoryText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  categoryTextActive: { color: '#FFFFFF' },
+  priceFilterRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginTop: 4 },
+  priceInput: { flex: 1, height: 40, backgroundColor: '#F1F5F9', borderRadius: 10, paddingHorizontal: 12, fontSize: 13, color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0' },
+  priceDivider: { marginHorizontal: 8, color: '#94A3B8', fontWeight: '700' },
+  applyFilterButton: { width: 40, height: 40, backgroundColor: '#2563EB', borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 100 },
   emptyText: { marginTop: 12, fontSize: 14, color: '#94A3B8', fontWeight: '500' },
-  listContent: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },
+  listContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40, flexGrow: 1 },
   row: { justifyContent: 'space-between' },
-  card: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
-    elevation: 1,
-  },
+  card: { width: '48%', backgroundColor: '#FFFFFF', borderRadius: 16, marginBottom: 16, overflow: 'hidden', elevation: 1 },
   imageWrapper: { position: 'relative' },
   cardImage: { width: '100%', height: 120, backgroundColor: '#E2E8F0' },
-  heartButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  heartButton: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' },
   cardBody: { padding: 10 },
   cardTitle: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
   cardPrice: { fontSize: 13, fontWeight: '700', color: '#2563EB', marginTop: 4 },

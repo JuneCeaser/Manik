@@ -19,9 +19,8 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../constants/api';
 
-type ActiveModal = 'NONE' | 'CHANGE_NAME' | 'CHANGE_PASSWORD' | 'DELETE_ACCOUNT' | 'ADD_WHATSAPP' | 'ADD_LOCATION';
+type ActiveModal = 'NONE' | 'SETTINGS' | 'CHANGE_NAME' | 'CHANGE_PASSWORD' | 'DELETE_ACCOUNT' | 'ADD_WHATSAPP' | 'ADD_LOCATION';
 
-// Small, non-exhaustive list of country codes. Add more as needed.
 const COUNTRY_CODES = [
   { code: '+94', country: 'Sri Lanka', flag: '🇱🇰' },
   { code: '+91', country: 'India', flag: '🇮🇳' },
@@ -35,8 +34,6 @@ const COUNTRY_CODES = [
   { code: '+65', country: 'Singapore', flag: '🇸🇬' },
 ];
 
-// Province -> City options for the location dropdown. Keys must match the
-// backend's SRI_LANKA_PROVINCES list exactly.
 const PROVINCE_CITY_MAP: Record<string, string[]> = {
   Western: ['Colombo', 'Dehiwala-Mount Lavinia', 'Moratuwa', 'Negombo', 'Gampaha', 'Kalutara', 'Panadura', 'Ja-Ela'],
   Central: ['Kandy', 'Matale', 'Nuwara Eliya', 'Gampola', 'Nawalapitiya', 'Hatton'],
@@ -52,7 +49,7 @@ const PROVINCE_CITY_MAP: Record<string, string[]> = {
 const PROVINCES = Object.keys(PROVINCE_CITY_MAP);
 
 export default function ProfileScreen() {
-  const { user, userToken, logout, loginState } = useAuth();
+  const { user, userToken, logout, loginState, preferredCurrency, updatePreferredCurrency } = useAuth();
   const router = useRouter();
 
   const [activeModal, setActiveModal] = useState<ActiveModal>('NONE');
@@ -61,17 +58,14 @@ export default function ProfileScreen() {
   const [imageUploading, setImageUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Form States
   const [newName, setNewName] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
 
-  // WhatsApp form state
   const [whatsappCode, setWhatsappCode] = useState('+94');
   const [whatsappNumberInput, setWhatsappNumberInput] = useState('');
   const [countryPickerVisible, setCountryPickerVisible] = useState(false);
 
-  // Location form state
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [provincePickerVisible, setProvincePickerVisible] = useState(false);
@@ -404,7 +398,24 @@ export default function ProfileScreen() {
           <Text style={styles.userName}>{user.name}</Text>
           <Text style={styles.userPhone}>+{user.phone}</Text>
 
-          {/* SUBSCRIPTION ROW */}
+          <View style={styles.currencyToggleRow}>
+            <Text style={styles.actionText}>App Display Currency</Text>
+            <View style={styles.currencyToggleButtons}>
+              <Pressable 
+                style={[styles.currencyOption, preferredCurrency === 'LKR' && styles.currencyOptionActive]} 
+                onPress={() => updatePreferredCurrency('LKR')}
+              >
+                <Text style={[styles.currencyOptionText, preferredCurrency === 'LKR' && styles.currencyOptionTextActive]}>LKR</Text>
+              </Pressable>
+              <Pressable 
+                style={[styles.currencyOption, preferredCurrency === 'USD' && styles.currencyOptionActive]} 
+                onPress={() => updatePreferredCurrency('USD')}
+              >
+                <Text style={[styles.currencyOptionText, preferredCurrency === 'USD' && styles.currencyOptionTextActive]}>USD</Text>
+              </Pressable>
+            </View>
+          </View>
+
           <Pressable style={styles.actionRow} onPress={() => router.push('/subscription')}>
             <Ionicons name="wallet-outline" size={20} color="#2563EB" />
             <Text style={[styles.actionText, { color: '#2563EB' }]}>Ad Credits / Subscribe</Text>
@@ -414,22 +425,9 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </Pressable>
 
-          {/* MY ADS ROW */}
           <Pressable style={styles.actionRow} onPress={() => router.push('/my-ads')}>
             <Ionicons name="pricetags-outline" size={20} color="#334155" />
             <Text style={styles.actionText}>My Ads</Text>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-          </Pressable>
-
-          <Pressable style={styles.actionRow} onPress={() => setActiveModal('CHANGE_NAME')}>
-            <Ionicons name="pencil-outline" size={20} color="#334155" />
-            <Text style={styles.actionText}>Change Name</Text>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-          </Pressable>
-
-          <Pressable style={styles.actionRow} onPress={() => setActiveModal('CHANGE_PASSWORD')}>
-            <Ionicons name="key-outline" size={20} color="#334155" />
-            <Text style={styles.actionText}>Change Password</Text>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </Pressable>
 
@@ -453,17 +451,13 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </Pressable>
 
-          <Pressable style={[styles.actionRow, { borderBottomWidth: 0 }]} onPress={() => setActiveModal('DELETE_ACCOUNT')}>
-            <Ionicons name="trash-outline" size={20} color="#EF4444" />
-            <Text style={[styles.actionText, { color: '#EF4444' }]}>Delete Account</Text>
+          <Pressable style={[styles.actionRow, { borderBottomWidth: 0 }]} onPress={() => setActiveModal('SETTINGS')}>
+            <Ionicons name="settings-outline" size={20} color="#334155" />
+            <Text style={styles.actionText}>Settings</Text>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </Pressable>
         </View>
       )}
-
-      <Pressable onPress={logout} style={styles.logoutButton}>
-        <Text style={styles.logoutText}>Log Out</Text>
-      </Pressable>
 
       <Modal visible={activeModal !== 'NONE'} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -471,16 +465,44 @@ export default function ProfileScreen() {
             
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
+                {activeModal === 'SETTINGS' && 'Account Settings'}
                 {activeModal === 'CHANGE_NAME' && 'Change Name'}
                 {activeModal === 'CHANGE_PASSWORD' && 'Change Password'}
                 {activeModal === 'DELETE_ACCOUNT' && 'Delete Account'}
                 {activeModal === 'ADD_WHATSAPP' && 'WhatsApp Number'}
                 {activeModal === 'ADD_LOCATION' && 'Location'}
               </Text>
-              <Pressable onPress={closeModal}>
-                <Ionicons name="close" size={24} color="#64748B" />
+              <Pressable onPress={activeModal === 'SETTINGS' ? closeModal : () => setActiveModal('SETTINGS')}>
+                <Ionicons name={activeModal === 'SETTINGS' ? 'close' : 'arrow-back'} size={24} color="#64748B" />
               </Pressable>
             </View>
+
+            {/* SETTINGS MENU */}
+            {activeModal === 'SETTINGS' && (
+              <>
+                <Pressable style={styles.actionRow} onPress={() => setActiveModal('CHANGE_NAME')}>
+                  <Ionicons name="pencil-outline" size={20} color="#334155" />
+                  <Text style={styles.actionText}>Change Name</Text>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </Pressable>
+
+                <Pressable style={styles.actionRow} onPress={() => setActiveModal('CHANGE_PASSWORD')}>
+                  <Ionicons name="key-outline" size={20} color="#334155" />
+                  <Text style={styles.actionText}>Change Password</Text>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </Pressable>
+
+                <Pressable style={[styles.actionRow, { borderBottomWidth: 0 }]} onPress={() => setActiveModal('DELETE_ACCOUNT')}>
+                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                  <Text style={[styles.actionText, { color: '#EF4444' }]}>Delete Account</Text>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </Pressable>
+
+                <Pressable onPress={logout} style={styles.logoutButton}>
+                  <Text style={styles.logoutText}>Log Out</Text>
+                </Pressable>
+              </>
+            )}
 
             {/* DIRECT NAME CHANGE UI */}
             {activeModal === 'CHANGE_NAME' && (
@@ -686,7 +708,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollContent: { padding: 22, paddingTop: 60 },
+  scrollContent: { padding: 22, paddingTop: 60, paddingBottom: 60 },
   headerTitle: { fontSize: 26, fontWeight: '800', color: '#0F172A', marginBottom: 20 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, elevation: 3, marginBottom: 20 },
   avatarContainer: { alignSelf: 'center', position: 'relative', marginBottom: 10 },
@@ -694,10 +716,16 @@ const styles = StyleSheet.create({
   editBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#0F172A', width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
   userName: { fontSize: 20, fontWeight: '700', color: '#0F172A', textAlign: 'center', marginTop: 8 },
   userPhone: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 20 },
+  currencyToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  currencyToggleButtons: { flexDirection: 'row' },
+  currencyOption: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F1F5F9', marginLeft: 8 },
+  currencyOptionActive: { backgroundColor: '#2563EB' },
+  currencyOptionText: { fontSize: 13, fontWeight: '700', color: '#64748B' },
+  currencyOptionTextActive: { color: '#FFFFFF' },
   actionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   actionText: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: '600', color: '#334155' },
   actionValue: { fontSize: 13, color: '#94A3B8', marginRight: 6 },
-  logoutButton: { backgroundColor: '#F1F5F9', padding: 16, borderRadius: 14, alignItems: 'center' },
+  logoutButton: { backgroundColor: '#F1F5F9', padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 24 },
   logoutText: { color: '#64748B', fontWeight: '700', fontSize: 15 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
   modalCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 20 },

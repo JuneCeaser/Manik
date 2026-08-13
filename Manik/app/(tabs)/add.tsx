@@ -87,7 +87,7 @@ const FieldSelector = ({ label, value, placeholder, onPress, disabled }: { label
 );
 
 export default function AddScreen() {
-  const { user, userToken, logout } = useAuth();
+  const { user, userToken, logout, preferredCurrency } = useAuth();
   const router = useRouter();
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   
@@ -104,7 +104,6 @@ export default function AddScreen() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
   const [priceAmount, setPriceAmount] = useState('');
-  const [currency, setCurrency] = useState<'LKR' | 'USD'>('LKR');
   const [negotiable, setNegotiable] = useState(false);
 
   const [weightCarats, setWeightCarats] = useState('');
@@ -156,7 +155,6 @@ export default function AddScreen() {
         setTitle(ad.title);
         setCategory(ad.category);
         setPriceAmount(String(ad.price.amount));
-        setCurrency(ad.price.currency);
         setNegotiable(ad.price.negotiable);
         setWeightCarats(String(ad.weightCarats));
         setOrigin(ad.origin || '');
@@ -216,14 +214,12 @@ export default function AddScreen() {
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       selectionLimit: remainingSlots,
-      quality: 1, // Let ImageManipulator handle the compression below
+      quality: 1,
     });
 
     if (!result.canceled) {
-      // Process all images asynchronously to ensure they are safely resized
       const processedImages = await Promise.all(
         result.assets.map(async (a) => {
-          // Shrink massive DSLR photos to a safe 1920px width and convert to JPEG
           const manipulated = await ImageManipulator.manipulateAsync(
             a.uri,
             [{ resize: { width: 1920 } }],
@@ -234,7 +230,7 @@ export default function AddScreen() {
             url: manipulated.uri, 
             fileId: '',
             isNew: true,
-            ext: 'jpg', // Guaranteed to be jpg now
+            ext: 'jpg', 
           };
         })
       );
@@ -259,7 +255,6 @@ export default function AddScreen() {
     });
 
     if (!result.canceled) {
-      // Safely resize and format the certificate
       const manipulated = await ImageManipulator.manipulateAsync(
         result.assets[0].uri,
         [{ resize: { width: 1920 } }],
@@ -281,7 +276,6 @@ export default function AddScreen() {
     setTitle('');
     setCategory('');
     setPriceAmount('');
-    setCurrency('LKR');
     setNegotiable(false);
     setWeightCarats('');
     setColor('');
@@ -384,7 +378,7 @@ export default function AddScreen() {
         category,
         price: {
           amount: Number(priceAmount),
-          currency,
+          currency: preferredCurrency, // Uses Global User Preference
           negotiable,
         },
         weightCarats: Number(weightCarats),
@@ -454,7 +448,7 @@ export default function AddScreen() {
     }
   };
 
-  const estimatedCredits = priceAmount && !isNaN(Number(priceAmount)) && Number(priceAmount) > 0 ? getEstimatedRequiredCredits(Number(priceAmount), currency) : null;
+  const estimatedCredits = priceAmount && !isNaN(Number(priceAmount)) && Number(priceAmount) > 0 ? getEstimatedRequiredCredits(Number(priceAmount), preferredCurrency) : null;
 
   if (isEditMode && initialLoading) {
     return (
@@ -478,7 +472,6 @@ export default function AddScreen() {
           )}
         </View>
 
-        {/* IMAGES */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Photos ({images.length}/5)</Text>
           <Text style={styles.sectionHint}>Add at least 1 photo. Top, bottom, and side angles help buyers most.</Text>
@@ -500,7 +493,6 @@ export default function AddScreen() {
           </View>
         </View>
 
-        {/* CERTIFICATE */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Gemological Certificate (Optional)</Text>
           <Pressable style={styles.certUploadBox} onPress={pickCertificateImage}>
@@ -522,7 +514,6 @@ export default function AddScreen() {
           )}
         </View>
 
-        {/* CORE DETAILS */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Core Details</Text>
 
@@ -535,11 +526,9 @@ export default function AddScreen() {
 
           <Text style={styles.fieldLabel}>Price</Text>
           <View style={styles.currencyToggleRow}>
-            {(['LKR', 'USD'] as const).map((cur) => (
-              <Pressable key={cur} style={[styles.currencyOption, currency === cur && styles.currencyOptionActive]} onPress={() => setCurrency(cur)}>
-                <Text style={[styles.currencyOptionText, currency === cur && styles.currencyOptionTextActive]}>{cur}</Text>
-              </Pressable>
-            ))}
+            <View style={[styles.currencyOption, styles.currencyOptionActive]}>
+              <Text style={styles.currencyOptionTextActive}>{preferredCurrency}</Text>
+            </View>
             <TextInput style={styles.priceInput} placeholder="Amount" keyboardType="numeric" value={priceAmount} onChangeText={setPriceAmount} />
           </View>
 
@@ -558,7 +547,6 @@ export default function AddScreen() {
           )}
         </View>
 
-        {/* SPECIFICATIONS */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Gem Specifications</Text>
 
@@ -597,7 +585,6 @@ export default function AddScreen() {
           )}
         </View>
 
-        {/* DESCRIPTION & LOCATION */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Description</Text>
           <TextInput style={[styles.input, styles.textArea]} placeholder="Describe unique features..." value={description} onChangeText={setDescription} multiline numberOfLines={5} />

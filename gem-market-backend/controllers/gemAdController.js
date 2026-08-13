@@ -114,24 +114,50 @@ exports.getGemAdById = async (req, res) => {
   }
 };
 
-// --- PAGINATION ADDED HERE ---
 exports.getPublishedGemAds = async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20; // Load 20 items per scroll
+    const limit = parseInt(req.query.limit, 10) || 20; 
     const skip = (page - 1) * limit;
 
-    const gemAds = await GemAd.find({ status: 'APPROVED' })
+    const category = req.query.category;
+    const minPrice = parseFloat(req.query.minPrice);
+    const maxPrice = parseFloat(req.query.maxPrice);
+    const prefCurrency = req.query.currency || 'LKR';
+    const exchangeRate = parseFloat(req.query.rate) || 300;
+
+    let query = { status: 'APPROVED' };
+
+    if (category && category !== 'All') {
+      query.category = category;
+    }
+
+    const gemAds = await GemAd.find(query)
       .populate('user', 'name')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+      .sort({ createdAt: -1 });
 
-    // Check if there are more gems to load after this batch
-    const totalAds = await GemAd.countDocuments({ status: 'APPROVED' });
-    const hasMore = skip + gemAds.length < totalAds;
+    let filteredAds = gemAds;
 
-    return res.json({ success: true, gemAds, hasMore });
+    if (!isNaN(minPrice) || !isNaN(maxPrice)) {
+      filteredAds = filteredAds.filter(ad => {
+        let adAmountInPref = ad.price.amount;
+        
+        if (ad.price.currency === 'LKR' && prefCurrency === 'USD') {
+          adAmountInPref = ad.price.amount / exchangeRate;
+        } else if (ad.price.currency === 'USD' && prefCurrency === 'LKR') {
+          adAmountInPref = ad.price.amount * exchangeRate;
+        }
+
+        if (!isNaN(minPrice) && adAmountInPref < minPrice) return false;
+        if (!isNaN(maxPrice) && adAmountInPref > maxPrice) return false;
+        return true;
+      });
+    }
+
+    const paginatedAds = filteredAds.slice(skip, skip + limit);
+    const hasMore = skip + paginatedAds.length < filteredAds.length;
+
+    return res.json({ success: true, gemAds: paginatedAds, hasMore });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Could not fetch ads.' });
   }

@@ -13,10 +13,11 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../constants/api';
+import { formatDisplayPrice, getPreferredCurrency, fetchLiveExchangeRate } from '../../utils/currency';
 
 const GEMS_URL = `${API_BASE_URL.replace('/auth', '')}/gems`;
 const FAVORITES_URL = `${API_BASE_URL.replace('/auth', '')}/favorites`;
@@ -53,11 +54,6 @@ type GemAdDetails = {
   };
 };
 
-const formatPrice = (price: GemAdDetails['price']) => {
-  const symbol = price.currency === 'USD' ? '$' : 'Rs.';
-  return `${symbol} ${price.amount.toLocaleString()}${price.negotiable ? ' (Negotiable)' : ''}`;
-};
-
 export default function GemDetailsScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { userToken } = useAuth();
@@ -68,6 +64,22 @@ export default function GemDetailsScreen() {
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  // Currency States
+  const [prefCurrency, setPrefCurrency] = useState<'LKR' | 'USD'>('LKR');
+  const [exchangeRate, setExchangeRate] = useState(300);
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadPreferences = async () => {
+        const currency = await getPreferredCurrency();
+        const rate = await fetchLiveExchangeRate();
+        setPrefCurrency(currency);
+        setExchangeRate(rate);
+      };
+      loadPreferences();
+    }, [])
+  );
 
   const fetchDetails = useCallback(async () => {
     if (!id) return;
@@ -137,19 +149,19 @@ export default function GemDetailsScreen() {
     }
   };
 
- const openWhatsApp = () => {
+  const openWhatsApp = () => {
     if (!ad?.user?.whatsappNumber) return;
     
     // Clean the phone number
     const fullNumber = `${ad.user.whatsappCountryCode || ''}${ad.user.whatsappNumber}`.replace(/\D/g, '');
     
-    // Create the default message string
-    const message = `Hello! I saw your ad on Manik: "${ad.title}" for ${formatPrice(ad.price)}. Is this still available?`;
+    // Create the default message string using dynamic currency
+    const displayPrice = formatDisplayPrice(ad.price, prefCurrency, exchangeRate);
+    const message = `Hello! I saw your ad on Manik: "${ad.title}" for ${displayPrice}. Is this still available?`;
     
-    // Encode the message so it works safely in a URL (handles spaces, symbols, etc.)
+    // Encode the message so it works safely in a URL
     const encodedMessage = encodeURIComponent(message);
 
-    // Append the encoded message to the WhatsApp link using ?text=
     Linking.openURL(`https://wa.me/${fullNumber}?text=${encodedMessage}`).catch(() => 
       Alert.alert('Error', 'Could not open WhatsApp.')
     );
@@ -206,7 +218,7 @@ export default function GemDetailsScreen() {
 
         <View style={styles.content}>
           <Text style={styles.title}>{ad.title}</Text>
-          <Text style={styles.price}>{formatPrice(ad.price)}</Text>
+          <Text style={styles.price}>{formatDisplayPrice(ad.price, prefCurrency, exchangeRate)}</Text>
 
           <View style={styles.metaRow}>
             <Text style={styles.metaText}>{ad.category}</Text>

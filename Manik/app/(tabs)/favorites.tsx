@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../constants/api';
+import { formatDisplayPrice, getPreferredCurrency, fetchLiveExchangeRate } from '../../utils/currency';
 
 const FAVORITES_URL = `${API_BASE_URL.replace('/auth', '')}/favorites`;
 
@@ -30,11 +31,6 @@ type FavoritedGemAd = {
   user: { name: string };
 };
 
-const formatPrice = (price: FavoritedGemAd['price']) => {
-  const symbol = price.currency === 'USD' ? '$' : 'Rs.';
-  return `${symbol} ${price.amount.toLocaleString()}${price.negotiable ? ' (Neg.)' : ''}`;
-};
-
 export default function FavoritesScreen() {
   const { userToken } = useAuth();
   const router = useRouter();
@@ -42,6 +38,10 @@ export default function FavoritesScreen() {
   const [ads, setAds] = useState<FavoritedGemAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Currency States
+  const [prefCurrency, setPrefCurrency] = useState<'LKR' | 'USD'>('LKR');
+  const [exchangeRate, setExchangeRate] = useState(300);
 
   // Pagination states
   const [page, setPage] = useState(1);
@@ -58,7 +58,6 @@ export default function FavoritesScreen() {
     else setLoadingMore(true);
 
     try {
-      // Added ?page=x&limit=20 to the URL
       const res = await fetch(`${FAVORITES_URL}?page=${pageNumber}&limit=20`, {
         headers: { Authorization: `Bearer ${userToken}` },
       });
@@ -66,9 +65,9 @@ export default function FavoritesScreen() {
       
       if (data.success) {
         if (pageNumber === 1) {
-          setAds(data.gemAds); // First page replaces the list
+          setAds(data.gemAds); 
         } else {
-          setAds((prev) => [...prev, ...data.gemAds]); // Next pages attach to the bottom
+          setAds((prev) => [...prev, ...data.gemAds]); 
         }
         setHasMore(data.hasMore);
         setPage(pageNumber);
@@ -83,17 +82,27 @@ export default function FavoritesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchFavorites(1);
+      const loadPreferencesAndData = async () => {
+        const currency = await getPreferredCurrency();
+        const rate = await fetchLiveExchangeRate();
+        setPrefCurrency(currency);
+        setExchangeRate(rate);
+        fetchFavorites(1);
+      };
+      loadPreferencesAndData();
     }, [fetchFavorites])
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    const currency = await getPreferredCurrency();
+    const rate = await fetchLiveExchangeRate();
+    setPrefCurrency(currency);
+    setExchangeRate(rate);
     await fetchFavorites(1);
     setRefreshing(false);
   }, [fetchFavorites]);
 
-  // Load more trigger
   const loadMoreAds = () => {
     if (!loadingMore && hasMore) {
       fetchFavorites(page + 1);
@@ -103,7 +112,6 @@ export default function FavoritesScreen() {
   const removeFavorite = async (adId: string) => {
     if (!userToken) return;
     
-    // Optimistic UI update (immediately remove from screen)
     const previousAds = [...ads];
     setAds((prev) => prev.filter((ad) => ad._id !== adId));
 
@@ -114,10 +122,10 @@ export default function FavoritesScreen() {
       });
       const data = await res.json();
       if (!data.success) {
-        setAds(previousAds); // Revert on fail
+        setAds(previousAds);
       }
     } catch {
-      setAds(previousAds); // Revert on fail
+      setAds(previousAds); 
     }
   };
 
@@ -134,7 +142,7 @@ export default function FavoritesScreen() {
       </View>
       <View style={styles.cardBody}>
         <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.cardPrice}>{formatPrice(item.price)}</Text>
+        <Text style={styles.cardPrice}>{formatDisplayPrice(item.price, prefCurrency, exchangeRate)}</Text>
         <View style={styles.cardMetaRow}>
           <Text style={styles.cardMeta} numberOfLines={1}>{item.category}</Text>
           <Text style={styles.cardMetaDot}>•</Text>
@@ -177,8 +185,6 @@ export default function FavoritesScreen() {
           columnWrapperStyle={styles.row}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
-          
-          // Pagination triggers
           onEndReached={loadMoreAds}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
@@ -186,7 +192,6 @@ export default function FavoritesScreen() {
               <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 20 }} />
             ) : null
           }
-
           ListEmptyComponent={
             <View style={styles.centerContent}>
               <Ionicons name="heart-outline" size={48} color="#CBD5E1" />
