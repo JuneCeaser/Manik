@@ -10,10 +10,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { API_BASE_URL } from '../../constants/api';
 
 const GEMS_URL = `${API_BASE_URL.replace('/auth', '')}/gems`;
@@ -39,6 +40,8 @@ const formatPrice = (price: MyGemAd['price']) => {
 
 export default function MyAdsScreen() {
   const { userToken, logout } = useAuth();
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
 
   const [ads, setAds] = useState<MyGemAd[]>([]);
@@ -71,8 +74,6 @@ export default function MyAdsScreen() {
     }
   }, [userToken, logout]);
 
-  // Refetch every time this screen gains focus, so edits/deletes made
-  // elsewhere (or a new ad just posted) are reflected immediately.
   useFocusEffect(
     useCallback(() => {
       fetchMyAds();
@@ -158,7 +159,7 @@ export default function MyAdsScreen() {
         {item.status === 'APPROVED' && (
           <View style={styles.actionRow}>
             <Pressable style={styles.editButton} onPress={() => handleEdit(item._id)}>
-              <Ionicons name="pencil-outline" size={14} color="#2563EB" />
+              <Ionicons name="pencil-outline" size={14} color={colors.primary} />
               <Text style={styles.editButtonText}>Edit</Text>
             </Pressable>
             <Pressable
@@ -167,10 +168,10 @@ export default function MyAdsScreen() {
               disabled={deletingId === item._id}
             >
               {deletingId === item._id ? (
-                <ActivityIndicator size="small" color="#EF4444" />
+                <ActivityIndicator size="small" color={colors.danger} />
               ) : (
                 <>
-                  <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                  <Ionicons name="trash-outline" size={14} color={colors.danger} />
                   <Text style={styles.deleteButtonText}>Delete</Text>
                 </>
               )}
@@ -206,7 +207,7 @@ export default function MyAdsScreen() {
 
       {loading ? (
         <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -214,10 +215,10 @@ export default function MyAdsScreen() {
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           ListEmptyComponent={
             <View style={styles.centerContent}>
-              <Ionicons name="pricetags-outline" size={44} color="#CBD5E1" />
+              <Ionicons name="pricetags-outline" size={44} color={colors.border} />
               <Text style={styles.emptyText}>
                 {activeTab === 'PENDING' ? 'No ads waiting for approval.' : 'No published ads yet.'}
               </Text>
@@ -229,44 +230,44 @@ export default function MyAdsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  headerTitle: { fontSize: 26, fontWeight: '800', color: '#0F172A', paddingHorizontal: 22, paddingTop: 12 },
+const createStyles = (colors: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  headerTitle: { fontSize: 26, fontWeight: '800', color: colors.text, paddingHorizontal: 22, paddingTop: 12 },
   tabRow: { flexDirection: 'row', paddingHorizontal: 22, marginTop: 16, marginBottom: 4 },
   tabButton: {
     flex: 1,
     paddingVertical: 10,
     borderRadius: 12,
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.inputBg,
     marginRight: 8,
   },
-  tabButtonActive: { backgroundColor: '#2563EB' },
-  tabText: { fontSize: 13, fontWeight: '700', color: '#64748B' },
+  tabButtonActive: { backgroundColor: colors.primary },
+  tabText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
   tabTextActive: { color: '#FFFFFF' },
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
-  emptyText: { marginTop: 12, fontSize: 14, color: '#94A3B8', fontWeight: '500', textAlign: 'center', paddingHorizontal: 40 },
+  emptyText: { marginTop: 12, fontSize: 14, color: colors.textSecondary, fontWeight: '500', textAlign: 'center', paddingHorizontal: 40 },
   listContent: { paddingHorizontal: 22, paddingTop: 16, paddingBottom: 40, flexGrow: 1 },
   card: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 16,
     marginBottom: 14,
     overflow: 'hidden',
     elevation: 1,
   },
-  cardImage: { width: 90, height: '100%', minHeight: 110, backgroundColor: '#E2E8F0' },
+  cardImage: { width: 90, height: '100%', minHeight: 110, backgroundColor: colors.border },
   cardBody: { flex: 1, padding: 12 },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  cardTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: '#0F172A', marginRight: 8 },
+  cardTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.text, marginRight: 8 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   statusText: { fontSize: 10, fontWeight: '700', color: '#FFFFFF' },
-  cardPrice: { fontSize: 14, fontWeight: '700', color: '#2563EB', marginTop: 6 },
-  cardMeta: { fontSize: 12, color: '#64748B', marginTop: 4 },
-  cardDate: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
+  cardPrice: { fontSize: 14, fontWeight: '700', color: colors.primary, marginTop: 6 },
+  cardMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+  cardDate: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
   actionRow: { flexDirection: 'row', marginTop: 10 },
-  editButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, marginRight: 8 },
-  editButtonText: { fontSize: 12, fontWeight: '700', color: '#2563EB', marginLeft: 4 },
-  deleteButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 },
-  deleteButtonText: { fontSize: 12, fontWeight: '700', color: '#EF4444', marginLeft: 4 },
+  editButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.inputBg, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, marginRight: 8 },
+  editButtonText: { fontSize: 12, fontWeight: '700', color: colors.primary, marginLeft: 4 },
+  deleteButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.inputBg, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 },
+  deleteButtonText: { fontSize: 12, fontWeight: '700', color: colors.danger, marginLeft: 4 },
 });

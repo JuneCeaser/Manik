@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Redirect } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { API_BASE_URL } from '../../constants/api';
 
 type PaymentHistory = {
@@ -25,6 +26,8 @@ type PaymentHistory = {
 
 export default function SubscriptionScreen() {
   const { userToken } = useAuth();
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
 
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,14 +57,12 @@ export default function SubscriptionScreen() {
     fetchHistory();
   }, [userToken]);
 
-  // Pull-to-refresh handler
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchHistory();
     setRefreshing(false);
   }, [userToken]);
 
-  // AUTH GUARD: Placed safely after all hooks are declared
   if (!userToken) {
     return <Redirect href="/login" />;
   }
@@ -128,8 +129,8 @@ export default function SubscriptionScreen() {
 
   const getStatusColor = (status: string) => {
     if (status === 'APPROVED') return '#10B981';
-    if (status === 'REJECTED') return '#EF4444';
-    return '#F59E0B'; // Pending (Orange)
+    if (status === 'REJECTED') return colors.danger;
+    return '#F59E0B'; 
   };
 
   return (
@@ -137,7 +138,7 @@ export default function SubscriptionScreen() {
       style={styles.container} 
       contentContainerStyle={styles.scrollContent}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
       }
     >
       
@@ -153,15 +154,15 @@ export default function SubscriptionScreen() {
           <Text style={styles.cardTitle}>How would you like to pay?</Text>
 
           <Pressable style={styles.methodButton} onPress={() => setPaymentMethod('PAYHERE')}>
-            <Ionicons name="card-outline" size={24} color="#2563EB" />
+            <Ionicons name="card-outline" size={24} color={colors.primary} />
             <Text style={styles.methodText}>Pay Online (Visa / Master)</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </Pressable>
 
           <Pressable style={styles.methodButton} onPress={() => setPaymentMethod('MANUAL')}>
             <Ionicons name="document-text-outline" size={24} color="#10B981" />
             <Text style={styles.methodText}>Manual Bank Transfer</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </Pressable>
         </View>
       )}
@@ -170,11 +171,11 @@ export default function SubscriptionScreen() {
       {paymentMethod === 'PAYHERE' && (
         <View style={styles.card}>
           <Pressable onPress={() => setPaymentMethod('NONE')} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={20} color="#64748B" />
+            <Ionicons name="arrow-back" size={20} color={colors.textSecondary} />
             <Text style={styles.backText}>Back to options</Text>
           </Pressable>
           <Text style={styles.cardTitle}>Secure Online Checkout</Text>
-          <Text style={{ color: '#64748B', marginBottom: 20 }}>
+          <Text style={{ color: colors.textSecondary, marginBottom: 20 }}>
             PayHere integration will be wired up here soon!
           </Text>
         </View>
@@ -184,16 +185,16 @@ export default function SubscriptionScreen() {
       {paymentMethod === 'MANUAL' && (
         <View style={styles.card}>
           <Pressable onPress={() => setPaymentMethod('NONE')} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={20} color="#64748B" />
+            <Ionicons name="arrow-back" size={20} color={colors.textSecondary} />
             <Text style={styles.backText}>Back to options</Text>
           </Pressable>
 
           <Text style={styles.cardTitle}>Bank Details</Text>
           <View style={styles.bankInfoBox}>
-            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold' }}>Bank:</Text> Commercial Bank</Text>
-            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold' }}>Account Name:</Text> Manik Gem Market</Text>
-            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold' }}>Account No:</Text> 1234567890</Text>
-            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold' }}>Branch:</Text> Colombo</Text>
+            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold', color: colors.text }}>Bank:</Text> Commercial Bank</Text>
+            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold', color: colors.text }}>Account Name:</Text> Manik Gem Market</Text>
+            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold', color: colors.text }}>Account No:</Text> 1234567890</Text>
+            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold', color: colors.text }}>Branch:</Text> Colombo</Text>
           </View>
 
           <Text style={styles.instructionText}>
@@ -205,7 +206,7 @@ export default function SubscriptionScreen() {
               <Image source={{ uri: slipImage }} style={styles.previewImage} />
             ) : (
               <>
-                <Ionicons name="cloud-upload-outline" size={40} color="#94A3B8" />
+                <Ionicons name="cloud-upload-outline" size={40} color={colors.textSecondary} />
                 <Text style={styles.uploadText}>Tap to select receipt image</Text>
               </>
             )}
@@ -229,7 +230,7 @@ export default function SubscriptionScreen() {
           <Text style={styles.historyTitle}>Payment History</Text>
           
           {loadingHistory ? (
-            <ActivityIndicator size="small" color="#2563EB" style={{ marginTop: 20 }} />
+            <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 20 }} />
           ) : myPayments.length === 0 ? (
             <Text style={styles.emptyText}>No previous payments found.</Text>
           ) : (
@@ -252,33 +253,33 @@ export default function SubscriptionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+const createStyles = (colors: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { padding: 22, paddingTop: 60, paddingBottom: 60 },
   header: { marginBottom: 30, alignItems: 'center' },
-  title: { fontSize: 28, fontWeight: '800', color: '#0F172A', marginBottom: 8 },
-  subtitle: { fontSize: 16, color: '#2563EB', fontWeight: '600' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 24, elevation: 2 },
-  cardTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 20 },
-  methodButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  methodText: { flex: 1, marginLeft: 12, fontSize: 16, fontWeight: '600', color: '#334155' },
+  title: { fontSize: 28, fontWeight: '800', color: colors.text, marginBottom: 8 },
+  subtitle: { fontSize: 16, color: colors.primary, fontWeight: '600' },
+  card: { backgroundColor: colors.card, borderRadius: 20, padding: 24, elevation: 2 },
+  cardTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 20 },
+  methodButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  methodText: { flex: 1, marginLeft: 12, fontSize: 16, fontWeight: '600', color: colors.text },
   backButton: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  backText: { marginLeft: 6, fontSize: 15, color: '#64748B', fontWeight: '500' },
-  bankInfoBox: { backgroundColor: '#F1F5F9', padding: 16, borderRadius: 12, marginBottom: 20 },
-  bankText: { fontSize: 15, color: '#334155', marginBottom: 6 },
-  instructionText: { fontSize: 14, color: '#64748B', lineHeight: 22, marginBottom: 20 },
-  uploadBox: { borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed', borderRadius: 16, height: 180, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC', overflow: 'hidden', marginBottom: 20 },
-  uploadText: { marginTop: 12, color: '#64748B', fontSize: 14, fontWeight: '500' },
+  backText: { marginLeft: 6, fontSize: 15, color: colors.textSecondary, fontWeight: '500' },
+  bankInfoBox: { backgroundColor: colors.inputBg, padding: 16, borderRadius: 12, marginBottom: 20 },
+  bankText: { fontSize: 15, color: colors.textSecondary, marginBottom: 6 },
+  instructionText: { fontSize: 14, color: colors.textSecondary, lineHeight: 22, marginBottom: 20 },
+  uploadBox: { borderWidth: 2, borderColor: colors.border, borderStyle: 'dashed', borderRadius: 16, height: 180, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.inputBg, overflow: 'hidden', marginBottom: 20 },
+  uploadText: { marginTop: 12, color: colors.textSecondary, fontSize: 14, fontWeight: '500' },
   previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   submitButton: { backgroundColor: '#10B981', padding: 16, borderRadius: 12, alignItems: 'center' },
   submitButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   
   historyContainer: { marginTop: 30 },
-  historyTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 16 },
-  emptyText: { color: '#64748B', fontStyle: 'italic', marginTop: 10 },
-  historyCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 16, marginBottom: 12, elevation: 1 },
-  historyAmount: { fontSize: 15, fontWeight: '700', color: '#334155', marginBottom: 4 },
-  historyDate: { fontSize: 13, color: '#94A3B8' },
+  historyTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 16 },
+  emptyText: { color: colors.textSecondary, fontStyle: 'italic', marginTop: 10 },
+  historyCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.card, padding: 16, borderRadius: 16, marginBottom: 12, elevation: 1 },
+  historyAmount: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  historyDate: { fontSize: 13, color: colors.textSecondary },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   statusText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
 });

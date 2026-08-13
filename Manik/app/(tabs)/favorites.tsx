@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { API_BASE_URL } from '../../constants/api';
 import { formatDisplayPrice, getPreferredCurrency, fetchLiveExchangeRate } from '../../utils/currency';
 
@@ -33,17 +34,17 @@ type FavoritedGemAd = {
 
 export default function FavoritesScreen() {
   const { userToken } = useAuth();
+  const { colors, isDark } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   
   const [ads, setAds] = useState<FavoritedGemAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Currency States
   const [prefCurrency, setPrefCurrency] = useState<'LKR' | 'USD'>('LKR');
   const [exchangeRate, setExchangeRate] = useState(300);
 
-  // Pagination states
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -73,7 +74,7 @@ export default function FavoritesScreen() {
         setPage(pageNumber);
       }
     } catch {
-      // Silently fail - the empty state will show
+      // Silently fail 
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -121,9 +122,7 @@ export default function FavoritesScreen() {
         headers: { Authorization: `Bearer ${userToken}` },
       });
       const data = await res.json();
-      if (!data.success) {
-        setAds(previousAds);
-      }
+      if (!data.success) setAds(previousAds);
     } catch {
       setAds(previousAds); 
     }
@@ -137,7 +136,7 @@ export default function FavoritesScreen() {
       <View style={styles.imageWrapper}>
         <Image source={{ uri: item.images[0]?.url }} style={styles.cardImage} />
         <Pressable style={styles.heartButton} onPress={() => removeFavorite(item._id)}>
-          <Ionicons name="heart" size={18} color="#EF4444" />
+          <Ionicons name="heart" size={18} color={colors.danger} />
         </Pressable>
       </View>
       <View style={styles.cardBody}>
@@ -149,7 +148,7 @@ export default function FavoritesScreen() {
           <Text style={styles.cardMeta}>{item.weightCarats}ct</Text>
         </View>
         <View style={styles.cardLocationRow}>
-          <Ionicons name="location-outline" size={13} color="#94A3B8" />
+          <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
           <Text style={styles.cardLocation} numberOfLines={1}>{item.location.city}, {item.location.province}</Text>
         </View>
       </View>
@@ -160,7 +159,7 @@ export default function FavoritesScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centerContent}>
-          <Ionicons name="heart-outline" size={48} color="#CBD5E1" />
+          <Ionicons name="heart-outline" size={48} color={colors.border} />
           <Text style={styles.emptyText}>Please log in to view favorites.</Text>
         </View>
       </SafeAreaView>
@@ -169,12 +168,12 @@ export default function FavoritesScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Text style={styles.headerTitle}>Favorites</Text>
 
       {loading && page === 1 ? (
         <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -184,17 +183,17 @@ export default function FavoritesScreen() {
           numColumns={2}
           columnWrapperStyle={styles.row}
           contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           onEndReached={loadMoreAds}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
             loadingMore ? (
-              <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 20 }} />
+              <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
             ) : null
           }
           ListEmptyComponent={
             <View style={styles.centerContent}>
-              <Ionicons name="heart-outline" size={48} color="#CBD5E1" />
+              <Ionicons name="heart-outline" size={48} color={colors.border} />
               <Text style={styles.emptyText}>No favorites yet.</Text>
             </View>
           }
@@ -204,40 +203,23 @@ export default function FavoritesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  headerTitle: { fontSize: 26, fontWeight: '800', color: '#0F172A', paddingHorizontal: 22, paddingTop: 12, paddingBottom: 8 },
+const createStyles = (colors: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  headerTitle: { fontSize: 26, fontWeight: '800', color: colors.text, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 8 },
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 100 },
-  emptyText: { marginTop: 12, fontSize: 14, color: '#94A3B8', fontWeight: '500' },
+  emptyText: { marginTop: 12, fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
   listContent: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },
   row: { justifyContent: 'space-between' },
-  card: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
-    elevation: 1,
-  },
+  card: { width: '48%', backgroundColor: colors.card, borderRadius: 16, marginBottom: 16, overflow: 'hidden', elevation: 1 },
   imageWrapper: { position: 'relative' },
-  cardImage: { width: '100%', height: 120, backgroundColor: '#E2E8F0' },
-  heartButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  cardImage: { width: '100%', height: 120, backgroundColor: colors.border },
+  heartButton: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
   cardBody: { padding: 10 },
-  cardTitle: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
-  cardPrice: { fontSize: 13, fontWeight: '700', color: '#2563EB', marginTop: 4 },
+  cardTitle: { fontSize: 13, fontWeight: '700', color: colors.text },
+  cardPrice: { fontSize: 13, fontWeight: '700', color: colors.primary, marginTop: 4 },
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  cardMeta: { fontSize: 11, color: '#64748B', fontWeight: '500', maxWidth: '70%' },
-  cardMetaDot: { fontSize: 11, color: '#CBD5E1', marginHorizontal: 4 },
+  cardMeta: { fontSize: 11, color: colors.textSecondary, fontWeight: '500', maxWidth: '70%' },
+  cardMetaDot: { fontSize: 11, color: colors.border, marginHorizontal: 4 },
   cardLocationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  cardLocation: { fontSize: 11, color: '#94A3B8', marginLeft: 3, flexShrink: 1 },
+  cardLocation: { fontSize: 11, color: colors.textSecondary, marginLeft: 3, flexShrink: 1 },
 });

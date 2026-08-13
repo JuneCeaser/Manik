@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +11,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router'; // <-- Imported useFocusEffect
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { API_BASE_URL } from '../../constants/api';
 
 type NotificationType = 'PAYMENT_APPROVED' | 'GENERAL';
@@ -32,11 +34,6 @@ const getIconForType = (type: NotificationType) => {
   return 'notifications-outline';
 };
 
-const getIconColorForType = (type: NotificationType) => {
-  if (type === 'PAYMENT_APPROVED') return '#10B981';
-  return '#2563EB';
-};
-
 const formatTimeAgo = (dateString: string) => {
   const date = new Date(dateString);
   const diffMs = Date.now() - date.getTime();
@@ -53,15 +50,25 @@ const formatTimeAgo = (dateString: string) => {
 
 export default function NotificationsScreen() {
   const { userToken, logout } = useAuth();
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchNotifications = useCallback(async () => {
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const fetchNotifications = useCallback(async (pageNumber = 1) => {
     if (!userToken) return;
+    
+    if (pageNumber === 1) setLoading(true);
+    else setLoadingMore(true);
+
     try {
-      const res = await fetch(NOTIFICATIONS_URL, {
+      const res = await fetch(`${NOTIFICATIONS_URL}?page=${pageNumber}&limit=20`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -78,27 +85,42 @@ export default function NotificationsScreen() {
       }
 
       if (data.success) {
-        setNotifications(data.notifications);
+        if (pageNumber === 1) {
+          setNotifications(data.notifications);
+        } else {
+          setNotifications((prev) => [...prev, ...data.notifications]);
+        }
+        setHasMore(data.hasMore);
+        setPage(pageNumber);
       }
     } catch {
       Alert.alert('Error', 'Failed to load notifications.');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [userToken, logout]);
 
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+  // REPLACED useEffect WITH useFocusEffect
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications(1);
+    }, [fetchNotifications])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchNotifications();
+    await fetchNotifications(1);
     setRefreshing(false);
   }, [fetchNotifications]);
 
+  const loadMoreNotifications = () => {
+    if (!loadingMore && hasMore) {
+      fetchNotifications(page + 1);
+    }
+  };
+
   const markAsRead = async (id: string) => {
-    // Optimistic update
     setNotifications((prev) =>
       prev.map((n) => (n._id === id ? { ...n, isRead: true } : n))
     );
@@ -120,7 +142,6 @@ export default function NotificationsScreen() {
       }
 
       if (!data.success) {
-        // Revert on failure
         setNotifications((prev) =>
           prev.map((n) => (n._id === id ? { ...n, isRead: false } : n))
         );
@@ -163,6 +184,11 @@ export default function NotificationsScreen() {
     }
   };
 
+  const getIconColorForType = (type: NotificationType) => {
+    if (type === 'PAYMENT_APPROVED') return '#10B981';
+    return colors.primary;
+  };
+
   const renderItem = ({ item }: { item: NotificationItem }) => (
     <Pressable
       style={[styles.notificationCard, !item.isRead && styles.notificationCardUnread]}
@@ -194,9 +220,9 @@ export default function NotificationsScreen() {
         )}
       </View>
 
-      {loading ? (
+      {loading && page === 1 ? (
         <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -205,11 +231,18 @@ export default function NotificationsScreen() {
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          }
+          onEndReached={loadMoreNotifications}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
+            ) : null
           }
           ListEmptyComponent={
             <View style={styles.centerContent}>
-              <Ionicons name="notifications-off-outline" size={48} color="#CBD5E1" />
+              <Ionicons name="notifications-off-outline" size={48} color={colors.border} />
               <Text style={styles.emptyText}>No notifications yet.</Text>
             </View>
           }
@@ -219,8 +252,8 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+const createStyles = (colors: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -229,14 +262,14 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 8,
   },
-  title: { fontSize: 26, fontWeight: '800', color: '#0F172A' },
-  markAllText: { fontSize: 13, fontWeight: '600', color: '#2563EB' },
+  title: { fontSize: 26, fontWeight: '800', color: colors.text },
+  markAllText: { fontSize: 13, fontWeight: '600', color: colors.primary },
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 100 },
-  emptyText: { marginTop: 12, fontSize: 14, color: '#94A3B8', fontWeight: '500' },
+  emptyText: { marginTop: 12, fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
   listContent: { paddingHorizontal: 22, paddingBottom: 40, flexGrow: 1 },
   notificationCard: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 14,
     marginTop: 12,
@@ -244,8 +277,8 @@ const styles = StyleSheet.create({
   },
   notificationCardUnread: {
     borderWidth: 1,
-    borderColor: '#DBEAFE',
-    backgroundColor: '#F5F9FF',
+    borderColor: colors.primary,
+    backgroundColor: colors.inputBg,
   },
   iconCircle: {
     width: 42,
@@ -257,8 +290,8 @@ const styles = StyleSheet.create({
   },
   notificationBody: { flex: 1 },
   notificationHeaderRow: { flexDirection: 'row', alignItems: 'center' },
-  notificationTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A', flex: 1 },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2563EB', marginLeft: 8 },
-  notificationMessage: { fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 },
-  notificationTime: { fontSize: 11, color: '#94A3B8', marginTop: 6, fontWeight: '500' },
+  notificationTitle: { fontSize: 15, fontWeight: '700', color: colors.text, flex: 1 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, marginLeft: 8 },
+  notificationMessage: { fontSize: 13, color: colors.textSecondary, marginTop: 4, lineHeight: 18 },
+  notificationTime: { fontSize: 11, color: colors.textSecondary, marginTop: 6, fontWeight: '500' },
 });

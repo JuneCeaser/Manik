@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { API_BASE_URL } from '../../constants/api';
 import { formatDisplayPrice, getPreferredCurrency, fetchLiveExchangeRate } from '../../utils/currency';
 
@@ -57,6 +58,8 @@ type GemAdDetails = {
 export default function GemDetailsScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { userToken } = useAuth();
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
 
   const [ad, setAd] = useState<GemAdDetails | null>(null);
@@ -65,7 +68,6 @@ export default function GemDetailsScreen() {
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
-  // Currency States
   const [prefCurrency, setPrefCurrency] = useState<'LKR' | 'USD'>('LKR');
   const [exchangeRate, setExchangeRate] = useState(300);
 
@@ -115,7 +117,6 @@ export default function GemDetailsScreen() {
         setIsFavorited(data.gemAdIds.includes(id));
       }
     } catch {
-      // Silently ignore
     }
   }, [id, userToken]);
 
@@ -151,17 +152,10 @@ export default function GemDetailsScreen() {
 
   const openWhatsApp = () => {
     if (!ad?.user?.whatsappNumber) return;
-    
-    // Clean the phone number
     const fullNumber = `${ad.user.whatsappCountryCode || ''}${ad.user.whatsappNumber}`.replace(/\D/g, '');
-    
-    // Create the default message string using dynamic currency
     const displayPrice = formatDisplayPrice(ad.price, prefCurrency, exchangeRate);
     const message = `Hello! I saw your ad on Manik: "${ad.title}" for ${displayPrice}. Is this still available?`;
-    
-    // Encode the message so it works safely in a URL
     const encodedMessage = encodeURIComponent(message);
-
     Linking.openURL(`https://wa.me/${fullNumber}?text=${encodedMessage}`).catch(() => 
       Alert.alert('Error', 'Could not open WhatsApp.')
     );
@@ -176,7 +170,7 @@ export default function GemDetailsScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </SafeAreaView>
     );
@@ -200,11 +194,11 @@ export default function GemDetailsScreen() {
           />
 
           <Pressable style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={20} color="#0F172A" />
+            <Ionicons name="arrow-back" size={20} color={colors.text} />
           </Pressable>
 
           <Pressable style={styles.favoriteButton} onPress={toggleFavorite} disabled={favoriteLoading}>
-            <Ionicons name={isFavorited ? 'heart' : 'heart-outline'} size={20} color={isFavorited ? '#EF4444' : '#0F172A'} />
+            <Ionicons name={isFavorited ? 'heart' : 'heart-outline'} size={20} color={isFavorited ? colors.danger : colors.text} />
           </Pressable>
 
           {ad.images.length > 1 && (
@@ -227,7 +221,7 @@ export default function GemDetailsScreen() {
           </View>
 
           <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={14} color="#94A3B8" />
+            <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
             <Text style={styles.locationText}>{ad.location.city}, {ad.location.province}</Text>
           </View>
 
@@ -293,7 +287,7 @@ export default function GemDetailsScreen() {
               {ad.user?.profileImage ? (
                 <Image source={{ uri: ad.user.profileImage }} style={styles.sellerAvatar} />
               ) : (
-                <Ionicons name="person-circle" size={44} color="#2563EB" />
+                <Ionicons name="person-circle" size={44} color={colors.primary} />
               )}
               <Text style={styles.sellerName}>{ad.user?.name || 'Manik Seller'}</Text>
             </View>
@@ -328,38 +322,38 @@ export default function GemDetailsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+const createStyles = (colors: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   imageCarouselWrapper: { position: 'relative' },
-  carouselImage: { width: SCREEN_WIDTH, height: 320, backgroundColor: '#E2E8F0' },
-  backButton: { position: 'absolute', top: 16, left: 16, width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' },
-  favoriteButton: { position: 'absolute', top: 16, right: 16, width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' },
+  carouselImage: { width: SCREEN_WIDTH, height: 320, backgroundColor: colors.border },
+  backButton: { position: 'absolute', top: 16, left: 16, width: 38, height: 38, borderRadius: 19, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+  favoriteButton: { position: 'absolute', top: 16, right: 16, width: 38, height: 38, borderRadius: 19, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
   dotsRow: { position: 'absolute', bottom: 14, alignSelf: 'center', flexDirection: 'row' },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.6)', marginHorizontal: 3 },
   dotActive: { backgroundColor: '#FFFFFF', width: 16 },
   content: { padding: 22 },
-  title: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
-  price: { fontSize: 20, fontWeight: '700', color: '#2563EB', marginTop: 6 },
+  title: { fontSize: 22, fontWeight: '800', color: colors.text },
+  price: { fontSize: 20, fontWeight: '700', color: colors.primary, marginTop: 6 },
   metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
-  metaText: { fontSize: 13, color: '#64748B', fontWeight: '600' },
-  metaDot: { fontSize: 13, color: '#CBD5E1', marginHorizontal: 6 },
+  metaText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
+  metaDot: { fontSize: 13, color: colors.border, marginHorizontal: 6 },
   locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
-  locationText: { fontSize: 13, color: '#94A3B8', marginLeft: 4 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, elevation: 2, marginTop: 18 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
-  specRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  specLabel: { fontSize: 13, color: '#64748B', fontWeight: '500' },
-  specValue: { fontSize: 13, color: '#0F172A', fontWeight: '700', textAlign: 'right', flex: 1, paddingLeft: 10 },
-  certificateImage: { width: '100%', height: 180, borderRadius: 12, backgroundColor: '#E2E8F0' },
-  descriptionText: { fontSize: 14, color: '#334155', lineHeight: 21 },
+  locationText: { fontSize: 13, color: colors.textSecondary, marginLeft: 4 },
+  card: { backgroundColor: colors.card, borderRadius: 20, padding: 20, elevation: 2, marginTop: 18 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
+  specRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.background },
+  specLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
+  specValue: { fontSize: 13, color: colors.text, fontWeight: '700', textAlign: 'right', flex: 1, paddingLeft: 10 },
+  certificateImage: { width: '100%', height: 180, borderRadius: 12, backgroundColor: colors.border },
+  descriptionText: { fontSize: 14, color: colors.textSecondary, lineHeight: 21 },
   sellerRow: { flexDirection: 'row', alignItems: 'center' },
-  sellerAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E2E8F0' },
-  sellerName: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginLeft: 12 },
+  sellerAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.border },
+  sellerName: { fontSize: 15, fontWeight: '700', color: colors.text, marginLeft: 12 },
   contactButtonsRow: { flexDirection: 'row', marginTop: 16 },
   whatsappButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12, marginRight: 10 },
-  callButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2563EB', paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12 },
+  callButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12 },
   contactButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13, marginLeft: 6 },
-  noContactText: { fontSize: 13, color: '#94A3B8', fontStyle: 'italic' },
-  postedDate: { fontSize: 12, color: '#94A3B8', textAlign: 'center', marginTop: 20 },
+  noContactText: { fontSize: 13, color: colors.textSecondary, fontStyle: 'italic' },
+  postedDate: { fontSize: 12, color: colors.textSecondary, textAlign: 'center', marginTop: 20 },
 });
