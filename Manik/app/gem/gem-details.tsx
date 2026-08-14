@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { API_BASE_URL } from '../../constants/api';
@@ -61,6 +61,7 @@ export default function GemDetailsScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [ad, setAd] = useState<GemAdDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -171,6 +172,7 @@ export default function GemDetailsScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading gem details…</Text>
         </View>
       </SafeAreaView>
     );
@@ -178,7 +180,7 @@ export default function GemDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.imageCarouselWrapper}>
           <FlatList
             data={ad.images}
@@ -192,6 +194,8 @@ export default function GemDetailsScreen() {
             }}
             renderItem={({ item }) => <Image source={{ uri: item.url }} style={styles.carouselImage} />}
           />
+
+          {ad.images.length > 1 && <View style={styles.carouselScrim} pointerEvents="none" />}
 
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={20} color={colors.text} />
@@ -215,37 +219,59 @@ export default function GemDetailsScreen() {
           <Text style={styles.price}>{formatDisplayPrice(ad.price, prefCurrency, exchangeRate)}</Text>
 
           <View style={styles.metaRow}>
-            <Text style={styles.metaText}>{ad.category}</Text>
-            <Text style={styles.metaDot}>•</Text>
-            <Text style={styles.metaText}>{ad.weightCarats}ct</Text>
+            <View style={styles.metaBadge}>
+              <Text style={styles.metaBadgeText}>{ad.category}</Text>
+            </View>
+            <View style={styles.metaBadge}>
+              <Text style={styles.metaBadgeText}>{ad.weightCarats}ct</Text>
+            </View>
           </View>
 
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+          <View style={styles.locationPill}>
+            <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
             <Text style={styles.locationText}>{ad.location.city}, {ad.location.province}</Text>
           </View>
 
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Specifications</Text>
+
             <View style={styles.specRow}>
+              <View style={styles.specIconWrap}>
+                <Ionicons name="color-palette-outline" size={15} color={colors.textSecondary} />
+              </View>
               <Text style={styles.specLabel}>Color</Text>
               <Text style={styles.specValue}>{ad.color}</Text>
             </View>
+
             <View style={styles.specRow}>
+              <View style={styles.specIconWrap}>
+                <Ionicons name="diamond-outline" size={15} color={colors.textSecondary} />
+              </View>
               <Text style={styles.specLabel}>Shape & Cut</Text>
               <Text style={styles.specValue}>{ad.shape}</Text>
             </View>
+
             <View style={styles.specRow}>
+              <View style={styles.specIconWrap}>
+                <Ionicons name="earth-outline" size={15} color={colors.textSecondary} />
+              </View>
               <Text style={styles.specLabel}>Origin</Text>
               <Text style={styles.specValue}>{ad.origin || 'Not specified'}</Text>
             </View>
+
             <View style={styles.specRow}>
+              <View style={styles.specIconWrap}>
+                <Ionicons name="eye-outline" size={15} color={colors.textSecondary} />
+              </View>
               <Text style={styles.specLabel}>Clarity</Text>
               <Text style={styles.specValue}>{ad.clarity || 'Not specified'}</Text>
             </View>
-            
+
             {ad.dimensions && (ad.dimensions.length > 0 || ad.dimensions.width > 0) && (
               <View style={styles.specRow}>
+                <View style={styles.specIconWrap}>
+                  <Ionicons name="resize-outline" size={15} color={colors.textSecondary} />
+                </View>
                 <Text style={styles.specLabel}>Dimensions</Text>
                 <Text style={styles.specValue}>
                   {ad.dimensions.length} x {ad.dimensions.width} x {ad.dimensions.depth} mm
@@ -254,16 +280,27 @@ export default function GemDetailsScreen() {
             )}
 
             <View style={styles.specRow}>
+              <View style={styles.specIconWrap}>
+                <Ionicons name="flask-outline" size={15} color={colors.textSecondary} />
+              </View>
               <Text style={styles.specLabel}>Treatment</Text>
               <Text style={styles.specValue}>{ad.treatment}</Text>
             </View>
-            <View style={[styles.specRow, { borderBottomWidth: 0 }]}>
+
+            <View style={[styles.specRow, styles.specRowLast]}>
+              <View style={styles.specIconWrap}>
+                <Ionicons name="ribbon-outline" size={15} color={colors.textSecondary} />
+              </View>
               <Text style={styles.specLabel}>Certification</Text>
-              <Text style={styles.specValue}>
-                {ad.certification?.status === 'Certified'
-                  ? `Certified (${ad.certification.labName})`
-                  : 'Not Certified'}
-              </Text>
+              <View style={styles.certBadgeWrap}>
+                <View style={[styles.certBadge, ad.certification?.status === 'Certified' && styles.certBadgeActive]}>
+                  <Text style={[styles.certBadgeText, ad.certification?.status === 'Certified' && styles.certBadgeTextActive]}>
+                    {ad.certification?.status === 'Certified'
+                      ? `Certified · ${ad.certification.labName}`
+                      : 'Not Certified'}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -287,37 +324,43 @@ export default function GemDetailsScreen() {
               {ad.user?.profileImage ? (
                 <Image source={{ uri: ad.user.profileImage }} style={styles.sellerAvatar} />
               ) : (
-                <Ionicons name="person-circle" size={44} color={colors.primary} />
+                <View style={styles.sellerAvatarPlaceholder}>
+                  <Ionicons name="person" size={22} color={colors.primary} />
+                </View>
               )}
-              <Text style={styles.sellerName}>{ad.user?.name || 'Manik Seller'}</Text>
-            </View>
-
-            <View style={styles.contactButtonsRow}>
-              {ad.user?.whatsappNumber ? (
-                <Pressable style={styles.whatsappButton} onPress={openWhatsApp}>
-                  <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" />
-                  <Text style={styles.contactButtonText}>WhatsApp</Text>
-                </Pressable>
-              ) : null}
-
-              {!ad.hidePhoneNumber && ad.contactPhone ? (
-                <Pressable style={styles.callButton} onPress={callSeller}>
-                  <Ionicons name="call" size={18} color="#FFFFFF" />
-                  <Text style={styles.contactButtonText}>Call</Text>
-                </Pressable>
-              ) : null}
-
-              {(!ad.user?.whatsappNumber && (ad.hidePhoneNumber || !ad.contactPhone)) && (
-                <Text style={styles.noContactText}>This seller has not shared contact details.</Text>
-              )}
+              <View style={styles.sellerTextWrap}>
+                <Text style={styles.sellerName}>{ad.user?.name || 'Manik Seller'}</Text>
+                <Text style={styles.sellerSub}>Listed this item</Text>
+              </View>
             </View>
           </View>
 
-          <Text style={styles.postedDate}>
-            Posted {new Date(ad.createdAt).toLocaleDateString()}
-          </Text>
+          <View style={styles.postedRow}>
+            <Ionicons name="time-outline" size={13} color={colors.textSecondary} />
+            <Text style={styles.postedDate}>Posted {new Date(ad.createdAt).toLocaleDateString()}</Text>
+          </View>
         </View>
       </ScrollView>
+
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {ad.user?.whatsappNumber ? (
+          <Pressable style={({ pressed }) => [styles.whatsappButton, pressed && styles.footerButtonPressed]} onPress={openWhatsApp}>
+            <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" />
+            <Text style={styles.contactButtonText}>WhatsApp</Text>
+          </Pressable>
+        ) : null}
+
+        {!ad.hidePhoneNumber && ad.contactPhone ? (
+          <Pressable style={({ pressed }) => [styles.callButton, pressed && styles.footerButtonPressed]} onPress={callSeller}>
+            <Ionicons name="call" size={18} color="#FFFFFF" />
+            <Text style={styles.contactButtonText}>Call</Text>
+          </Pressable>
+        ) : null}
+
+        {(!ad.user?.whatsappNumber && (ad.hidePhoneNumber || !ad.contactPhone)) && (
+          <Text style={styles.noContactText}>This seller has not shared contact details.</Text>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -325,35 +368,87 @@ export default function GemDetailsScreen() {
 const createStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  imageCarouselWrapper: { position: 'relative' },
-  carouselImage: { width: SCREEN_WIDTH, height: 320, backgroundColor: colors.border },
-  backButton: { position: 'absolute', top: 16, left: 16, width: 38, height: 38, borderRadius: 19, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
-  favoriteButton: { position: 'absolute', top: 16, right: 16, width: 38, height: 38, borderRadius: 19, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+  loadingText: { marginTop: 12, fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
+
+  scrollContent: { paddingBottom: 24 },
+
+  imageCarouselWrapper: { position: 'relative', overflow: 'hidden', borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  carouselImage: { width: SCREEN_WIDTH, height: 340, backgroundColor: colors.border },
+  carouselScrim: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 70, backgroundColor: '#000000', opacity: 0.16 },
+  backButton: {
+    position: 'absolute', top: 16, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: colors.card,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 4,
+  },
+  favoriteButton: {
+    position: 'absolute', top: 16, right: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: colors.card,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 4,
+  },
   dotsRow: { position: 'absolute', bottom: 14, alignSelf: 'center', flexDirection: 'row' },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.6)', marginHorizontal: 3 },
-  dotActive: { backgroundColor: '#FFFFFF', width: 16 },
+  dotActive: { backgroundColor: '#FFFFFF', width: 18 },
+
   content: { padding: 22 },
   title: { fontSize: 22, fontWeight: '800', color: colors.text },
-  price: { fontSize: 20, fontWeight: '700', color: colors.primary, marginTop: 6 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
-  metaText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
-  metaDot: { fontSize: 13, color: colors.border, marginHorizontal: 6 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
-  locationText: { fontSize: 13, color: colors.textSecondary, marginLeft: 4 },
-  card: { backgroundColor: colors.card, borderRadius: 20, padding: 20, elevation: 2, marginTop: 18 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
-  specRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.background },
-  specLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
+  price: { fontSize: 21, fontWeight: '800', color: colors.primary, marginTop: 6 },
+
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  metaBadge: { backgroundColor: colors.inputBg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, marginRight: 8 },
+  metaBadgeText: { fontSize: 12.5, fontWeight: '700', color: colors.textSecondary },
+
+  locationPill: {
+    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', backgroundColor: colors.inputBg,
+    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, marginTop: 12,
+  },
+  locationText: { fontSize: 12.5, fontWeight: '600', color: colors.textSecondary, marginLeft: 5 },
+
+  card: {
+    backgroundColor: colors.card, borderRadius: 20, padding: 20, marginTop: 18,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 3,
+  },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 12 },
+
+  specRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.background },
+  specRowLast: { borderBottomWidth: 0, paddingBottom: 0 },
+  specIconWrap: { width: 26, alignItems: 'center', marginRight: 8 },
+  specLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
   specValue: { fontSize: 13, color: colors.text, fontWeight: '700', textAlign: 'right', flex: 1, paddingLeft: 10 },
-  certificateImage: { width: '100%', height: 180, borderRadius: 12, backgroundColor: colors.border },
+
+  certBadgeWrap: { flex: 1, alignItems: 'flex-end' },
+  certBadge: { backgroundColor: colors.inputBg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  certBadgeActive: { backgroundColor: colors.primary },
+  certBadgeText: { fontSize: 11.5, fontWeight: '700', color: colors.textSecondary },
+  certBadgeTextActive: { color: '#FFFFFF' },
+
+  certificateImage: { width: '100%', height: 180, borderRadius: 14, backgroundColor: colors.border },
   descriptionText: { fontSize: 14, color: colors.textSecondary, lineHeight: 21 },
+
   sellerRow: { flexDirection: 'row', alignItems: 'center' },
-  sellerAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.border },
-  sellerName: { fontSize: 15, fontWeight: '700', color: colors.text, marginLeft: 12 },
-  contactButtonsRow: { flexDirection: 'row', marginTop: 16 },
-  whatsappButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12, marginRight: 10 },
-  callButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12 },
-  contactButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13, marginLeft: 6 },
-  noContactText: { fontSize: 13, color: colors.textSecondary, fontStyle: 'italic' },
-  postedDate: { fontSize: 12, color: colors.textSecondary, textAlign: 'center', marginTop: 20 },
+  sellerAvatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.border, borderWidth: 2, borderColor: colors.border },
+  sellerAvatarPlaceholder: {
+    width: 52, height: 52, borderRadius: 26, backgroundColor: colors.inputBg, alignItems: 'center', justifyContent: 'center',
+  },
+  sellerTextWrap: { marginLeft: 12, flex: 1 },
+  sellerName: { fontSize: 15, fontWeight: '800', color: colors.text },
+  sellerSub: { fontSize: 12.5, color: colors.textSecondary, marginTop: 2 },
+
+  postedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 20 },
+  postedDate: { fontSize: 12, color: colors.textSecondary, marginLeft: 5 },
+
+  footer: {
+    flexDirection: 'row', paddingHorizontal: 20, paddingTop: 14, backgroundColor: colors.card,
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  footerButtonPressed: { opacity: 0.75 },
+  whatsappButton: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#10B981',
+    paddingVertical: 13, borderRadius: 14, marginRight: 10,
+  },
+  callButton: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary,
+    paddingVertical: 13, borderRadius: 14,
+  },
+  contactButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14, marginLeft: 7 },
+  noContactText: { flex: 1, fontSize: 13, color: colors.textSecondary, fontStyle: 'italic', textAlign: 'center', paddingVertical: 8 },
 });

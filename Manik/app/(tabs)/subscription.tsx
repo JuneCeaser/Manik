@@ -192,9 +192,9 @@ export default function SubscriptionScreen() {
           <Text style={styles.cardTitle}>Bank Details</Text>
           <View style={styles.bankInfoBox}>
             <Text style={styles.bankText}><Text style={{ fontWeight: 'bold', color: colors.text }}>Bank:</Text> Commercial Bank</Text>
-            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold', color: colors.text }}>Account Name:</Text> Manik Gem Market</Text>
-            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold', color: colors.text }}>Account No:</Text> 1234567890</Text>
-            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold', color: colors.text }}>Branch:</Text> Colombo</Text>
+            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold', color: colors.text }}>Account Name:</Text> J C D Soysa</Text>
+            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold', color: colors.text }}>Account No:</Text> 8012401525</Text>
+            <Text style={styles.bankText}><Text style={{ fontWeight: 'bold', color: colors.text }}>Branch:</Text> Delgoda Laghf</Text>
           </View>
 
           <Text style={styles.instructionText}>

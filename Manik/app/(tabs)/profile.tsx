@@ -3,7 +3,9 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -286,326 +288,626 @@ export default function ProfileScreen() {
     } catch { Alert.alert('Error', 'Failed to delete account.'); } finally { setLoading(false); }
   };
 
+  // Purely presentational — reused so the sheet's back arrow, its header
+  // close button and the backdrop tap all agree on where "back" goes.
+  const goBackOrClose = activeModal === 'SETTINGS' ? closeModal : () => setActiveModal('SETTINGS');
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
-      <Text style={styles.headerTitle}>Manik Dashboard</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+    >
+      <View style={styles.topBar}>
+        <Text style={styles.topBarEyebrow}>Your Account</Text>
+        <Text style={styles.topBarTitle}>Manik Dashboard</Text>
+      </View>
 
-      {user && (
-        <View style={styles.card}>
-          <View style={styles.avatarContainer}>
-            <Pressable onPress={pickImage} disabled={imageUploading}>
-              {user.profileImage ? (
-                <Image source={{ uri: user.profileImage }} style={styles.avatarImage} />
-              ) : (
-                <Ionicons name="person-circle" size={80} color={colors.primary} />
-              )}
-              <View style={styles.editBadge}>
-                {imageUploading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="camera" size={12} color="#FFFFFF" />}
-              </View>
-            </Pressable>
-          </View>
-
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userPhone}>+{user.phone}</Text>
-
-          <View style={styles.currencyToggleRow}>
-            <Text style={styles.actionText}>App Display Theme</Text>
-            <View style={styles.currencyToggleButtons}>
-              <Pressable style={[styles.currencyOption, theme === 'system' && styles.currencyOptionActive]} onPress={() => setTheme('system')}>
-                <Text style={[styles.currencyOptionText, theme === 'system' && styles.currencyOptionTextActive]}>System</Text>
-              </Pressable>
-              <Pressable style={[styles.currencyOption, theme === 'light' && styles.currencyOptionActive]} onPress={() => setTheme('light')}>
-                <Text style={[styles.currencyOptionText, theme === 'light' && styles.currencyOptionTextActive]}>Light</Text>
-              </Pressable>
-              <Pressable style={[styles.currencyOption, theme === 'dark' && styles.currencyOptionActive]} onPress={() => setTheme('dark')}>
-                <Text style={[styles.currencyOptionText, theme === 'dark' && styles.currencyOptionTextActive]}>Dark</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.currencyToggleRow}>
-            <Text style={styles.actionText}>App Display Currency</Text>
-            <View style={styles.currencyToggleButtons}>
-              <Pressable style={[styles.currencyOption, currencyPref === 'LKR' && styles.currencyOptionActive]} onPress={() => handleCurrencyChange('LKR')}>
-                <Text style={[styles.currencyOptionText, currencyPref === 'LKR' && styles.currencyOptionTextActive]}>LKR</Text>
-              </Pressable>
-              <Pressable style={[styles.currencyOption, currencyPref === 'USD' && styles.currencyOptionActive]} onPress={() => handleCurrencyChange('USD')}>
-                <Text style={[styles.currencyOptionText, currencyPref === 'USD' && styles.currencyOptionTextActive]}>USD</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <Pressable style={styles.actionRow} onPress={() => router.push('/subscription')}>
-            <Ionicons name="wallet-outline" size={20} color={colors.primary} />
-            <Text style={[styles.actionText, { color: colors.primary }]}>Ad Credits / Subscribe</Text>
-            <Text style={[styles.actionValue, { color: colors.primary, fontWeight: '700' }]}>{(user as any)?.adCredits || 0} left</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-          </Pressable>
-
-          <Pressable style={styles.actionRow} onPress={() => router.push('/my-ads')}>
-            <Ionicons name="pricetags-outline" size={20} color={colors.textSecondary} />
-            <Text style={styles.actionText}>My Ads</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-          </Pressable>
-
-          <Pressable style={styles.actionRow} onPress={openWhatsappModal}>
-            <Ionicons name="logo-whatsapp" size={20} color={colors.textSecondary} />
-            <Text style={styles.actionText}>WhatsApp Number</Text>
-            <Text style={styles.actionValue}>{(user as any)?.whatsappNumber ? `${(user as any).whatsappCountryCode} ${(user as any).whatsappNumber}` : 'Not set'}</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-          </Pressable>
-
-          <Pressable style={styles.actionRow} onPress={openLocationModal}>
-            <Ionicons name="location-outline" size={20} color={colors.textSecondary} />
-            <Text style={styles.actionText}>Location</Text>
-            <Text style={styles.actionValue}>{(user as any)?.city ? `${(user as any).city}, ${(user as any).province}` : 'Not set'}</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-          </Pressable>
-
-          <Pressable style={[styles.actionRow, { borderBottomWidth: 0 }]} onPress={() => setActiveModal('SETTINGS')}>
-            <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
-            <Text style={styles.actionText}>Settings</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-          </Pressable>
+      {!user && (
+        <View style={styles.loadingState}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.loadingStateText}>Loading your profile…</Text>
         </View>
       )}
 
-      <Modal visible={activeModal !== 'NONE'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {activeModal === 'SETTINGS' && 'Account Settings'}
-                {activeModal === 'CHANGE_NAME' && 'Change Name'}
-                {activeModal === 'CHANGE_PASSWORD' && 'Change Password'}
-                {activeModal === 'DELETE_ACCOUNT' && 'Delete Account'}
-                {activeModal === 'ADD_WHATSAPP' && 'WhatsApp Number'}
-                {activeModal === 'ADD_LOCATION' && 'Location'}
-              </Text>
-              <Pressable onPress={activeModal === 'SETTINGS' ? closeModal : () => setActiveModal('SETTINGS')}>
-                <Ionicons name={activeModal === 'SETTINGS' ? 'close' : 'arrow-back'} size={24} color={colors.textSecondary} />
-              </Pressable>
+      {user && (
+        <>
+          {/* Hero */}
+          <View style={styles.heroCard}>
+            <View style={styles.heroBackdrop} />
+            <Pressable onPress={pickImage} disabled={imageUploading} style={styles.avatarWrapper}>
+              {user.profileImage ? (
+                <Image source={{ uri: user.profileImage }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="person" size={34} color={colors.primary} />
+                </View>
+              )}
+              <View style={styles.editBadge}>
+                {imageUploading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="camera" size={13} color="#FFFFFF" />}
+              </View>
+            </Pressable>
+
+            <Text style={styles.userName}>{user.name}</Text>
+            <View style={styles.phonePill}>
+              <Ionicons name="call-outline" size={12} color={colors.textSecondary} />
+              <Text style={styles.userPhone}>+{user.phone}</Text>
             </View>
+          </View>
 
-            {/* SETTINGS MENU */}
-            {activeModal === 'SETTINGS' && (
-              <>
-                <Pressable style={styles.actionRow} onPress={() => setActiveModal('CHANGE_NAME')}>
-                  <Ionicons name="pencil-outline" size={20} color={colors.textSecondary} />
-                  <Text style={styles.actionText}>Change Name</Text>
-                  <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          {/* Wallet / credits */}
+          <Pressable
+            style={({ pressed }) => [styles.walletCard, pressed && styles.rowPressed]}
+            onPress={() => router.push('/subscription')}
+          >
+            <View style={styles.walletBackdrop} />
+            <View style={styles.walletIconBadge}>
+              <Ionicons name="wallet-outline" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.walletTextWrap}>
+              <Text style={styles.walletLabel}>Ad Credits</Text>
+              <Text style={styles.walletSub}>Top up or manage your subscription</Text>
+            </View>
+            <Text style={styles.walletValue}>{(user as any)?.adCredits || 0}</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+          </Pressable>
+
+          {/* Preferences */}
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionLabel}>Preferences</Text>
+
+            <View style={[styles.prefRow, styles.prefRowLast]}>
+              <View style={styles.prefRowLabel}>
+                <Ionicons name="cash-outline" size={15} color={colors.textSecondary} />
+                <Text style={styles.prefRowText}>Display Currency</Text>
+              </View>
+              <View style={styles.segmented}>
+                <Pressable style={[styles.segment, currencyPref === 'LKR' && styles.segmentActive]} onPress={() => handleCurrencyChange('LKR')}>
+                  <Text style={[styles.segmentText, currencyPref === 'LKR' && styles.segmentTextActive]}>LKR</Text>
                 </Pressable>
-
-                <Pressable style={styles.actionRow} onPress={() => { setStep('INPUT'); setActiveModal('CHANGE_PASSWORD'); }}>
-                  <Ionicons name="key-outline" size={20} color={colors.textSecondary} />
-                  <Text style={styles.actionText}>Change Password</Text>
-                  <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                <Pressable style={[styles.segment, currencyPref === 'USD' && styles.segmentActive]} onPress={() => handleCurrencyChange('USD')}>
+                  <Text style={[styles.segmentText, currencyPref === 'USD' && styles.segmentTextActive]}>USD</Text>
                 </Pressable>
+              </View>
+            </View>
+          </View>
 
-                <Pressable style={[styles.actionRow, { borderBottomWidth: 0 }]} onPress={() => { setStep('INPUT'); setActiveModal('DELETE_ACCOUNT'); }}>
-                  <Ionicons name="trash-outline" size={20} color={colors.danger} />
-                  <Text style={[styles.actionText, { color: colors.danger }]}>Delete Account</Text>
-                  <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-                </Pressable>
+          {/* Account */}
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionLabel}>Account</Text>
 
-                <Pressable onPress={logout} style={styles.logoutButton}>
-                  <Text style={styles.logoutText}>Log Out</Text>
-                </Pressable>
-              </>
-            )}
+            <Pressable style={({ pressed }) => [styles.listRow, pressed && styles.rowPressed]} onPress={() => router.push('/my-ads')}>
+              <View style={styles.rowIconBadge}>
+                <Ionicons name="pricetags-outline" size={17} color={colors.textSecondary} />
+              </View>
+              <View style={styles.rowTextWrap}>
+                <Text style={styles.rowTitle}>My Ads</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </Pressable>
 
-            {activeModal === 'CHANGE_NAME' && (
-              <>
-                <TextInput style={styles.input} placeholderTextColor={colors.textSecondary} placeholder="New Full Name" value={newName} onChangeText={setNewName} />
-                <Pressable style={styles.modalButton} onPress={handleChangeName} disabled={loading}>
-                  {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Update Name</Text>}
-                </Pressable>
-              </>
-            )}
-
-            {activeModal === 'ADD_WHATSAPP' && (
-              <>
-                <Text style={{ color: colors.textSecondary, marginBottom: 16, fontSize: 14, lineHeight: 20 }}>
-                  This number is not verified — just used so buyers/sellers can reach you on WhatsApp.
+            <Pressable style={({ pressed }) => [styles.listRow, pressed && styles.rowPressed]} onPress={openWhatsappModal}>
+              <View style={styles.rowIconBadge}>
+                <Ionicons name="logo-whatsapp" size={17} color="#25D366" />
+              </View>
+              <View style={styles.rowTextWrap}>
+                <Text style={styles.rowTitle}>WhatsApp Number</Text>
+                <Text style={styles.rowSubtitle}>
+                  {(user as any)?.whatsappNumber ? `${(user as any).whatsappCountryCode} ${(user as any).whatsappNumber}` : 'Not set'}
                 </Text>
-                <View style={styles.phoneRow}>
-                  <Pressable style={styles.codeSelector} onPress={() => setCountryPickerVisible(true)}>
-                    <Text style={styles.codeSelectorText}>{whatsappCode}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </Pressable>
+
+            <Pressable style={({ pressed }) => [styles.listRow, pressed && styles.rowPressed]} onPress={openLocationModal}>
+              <View style={styles.rowIconBadge}>
+                <Ionicons name="location-outline" size={17} color={colors.textSecondary} />
+              </View>
+              <View style={styles.rowTextWrap}>
+                <Text style={styles.rowTitle}>Location</Text>
+                <Text style={styles.rowSubtitle}>
+                  {(user as any)?.city ? `${(user as any).city}, ${(user as any).province}` : 'Not set'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.listRow, styles.listRowLast, pressed && styles.rowPressed]}
+              onPress={() => setActiveModal('SETTINGS')}
+            >
+              <View style={styles.rowIconBadge}>
+                <Ionicons name="settings-outline" size={17} color={colors.textSecondary} />
+              </View>
+              <View style={styles.rowTextWrap}>
+                <Text style={styles.rowTitle}>Settings</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        </>
+      )}
+
+      {/* MAIN BOTTOM SHEET */}
+      <Modal visible={activeModal !== 'NONE'} animationType="slide" transparent onRequestClose={goBackOrClose}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <Pressable style={styles.sheetOverlay} onPress={goBackOrClose}>
+            <Pressable style={styles.sheetCard} onPress={() => {}}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>
+                  {activeModal === 'SETTINGS' && 'Account Settings'}
+                  {activeModal === 'CHANGE_NAME' && 'Change Name'}
+                  {activeModal === 'CHANGE_PASSWORD' && 'Change Password'}
+                  {activeModal === 'DELETE_ACCOUNT' && 'Delete Account'}
+                  {activeModal === 'ADD_WHATSAPP' && 'WhatsApp Number'}
+                  {activeModal === 'ADD_LOCATION' && 'Location'}
+                </Text>
+                <Pressable style={styles.sheetCloseBtn} onPress={goBackOrClose}>
+                  <Ionicons name={activeModal === 'SETTINGS' ? 'close' : 'arrow-back'} size={20} color={colors.text} />
+                </Pressable>
+              </View>
+
+              {/* SETTINGS MENU */}
+              {activeModal === 'SETTINGS' && (
+                <View>
+                  <View style={styles.prefRow}>
+                    <View style={styles.prefRowLabel}>
+                      <Ionicons name="contrast-outline" size={15} color={colors.textSecondary} />
+                      <Text style={styles.prefRowText}>Display Theme</Text>
+                    </View>
+                    <View style={styles.segmented}>
+                      <Pressable style={[styles.segment, theme === 'system' && styles.segmentActive]} onPress={() => setTheme('system')}>
+                        <Text style={[styles.segmentText, theme === 'system' && styles.segmentTextActive]}>System</Text>
+                      </Pressable>
+                      <Pressable style={[styles.segment, theme === 'light' && styles.segmentActive]} onPress={() => setTheme('light')}>
+                        <Text style={[styles.segmentText, theme === 'light' && styles.segmentTextActive]}>Light</Text>
+                      </Pressable>
+                      <Pressable style={[styles.segment, theme === 'dark' && styles.segmentActive]} onPress={() => setTheme('dark')}>
+                        <Text style={[styles.segmentText, theme === 'dark' && styles.segmentTextActive]}>Dark</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  <Pressable style={styles.sheetListRow} onPress={() => setActiveModal('CHANGE_NAME')}>
+                    <View style={styles.sheetRowIcon}>
+                      <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+                    </View>
+                    <Text style={styles.sheetRowText}>Change Name</Text>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                  </Pressable>
+
+                  <Pressable style={styles.sheetListRow} onPress={() => { setStep('INPUT'); setActiveModal('CHANGE_PASSWORD'); }}>
+                    <View style={styles.sheetRowIcon}>
+                      <Ionicons name="key-outline" size={18} color={colors.textSecondary} />
+                    </View>
+                    <Text style={styles.sheetRowText}>Change Password</Text>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                  </Pressable>
+
+                  <Pressable style={[styles.sheetListRow, styles.listRowLast]} onPress={() => { setStep('INPUT'); setActiveModal('DELETE_ACCOUNT'); }}>
+                    <View style={styles.sheetRowIcon}>
+                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                    </View>
+                    <Text style={[styles.sheetRowText, { color: colors.danger }]}>Delete Account</Text>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                  </Pressable>
+
+                  <Pressable onPress={logout} style={({ pressed }) => [styles.logoutButton, pressed && styles.rowPressed]}>
+                    <Ionicons name="log-out-outline" size={18} color={colors.textSecondary} />
+                    <Text style={styles.logoutText}>Log Out</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {activeModal === 'CHANGE_NAME' && (
+                <View>
+                  <Text style={styles.fieldLabel}>Full Name</Text>
+                  <View style={styles.inputWrap}>
+                    <Ionicons name="person-outline" size={18} color={colors.textSecondary} />
+                    <TextInput
+                      style={styles.inputField}
+                      placeholderTextColor={colors.textSecondary}
+                      placeholder="Enter your full name"
+                      value={newName}
+                      onChangeText={setNewName}
+                    />
+                  </View>
+                  <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.rowPressed]} onPress={handleChangeName} disabled={loading}>
+                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Update Name</Text>}
+                  </Pressable>
+                </View>
+              )}
+
+              {activeModal === 'ADD_WHATSAPP' && (
+                <View>
+                  <View style={styles.infoBanner}>
+                    <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8, marginTop: 1 }} />
+                    <Text style={styles.infoBannerText}>This number isn&apos;t verified — it&apos;s just how buyers and sellers reach you on WhatsApp.</Text>
+                  </View>
+                  <Text style={styles.fieldLabel}>WhatsApp Number</Text>
+                  <View style={styles.phoneRow}>
+                    <Pressable style={styles.codeSelector} onPress={() => setCountryPickerVisible(true)}>
+                      <Text style={styles.codeSelectorText}>{whatsappCode}</Text>
+                      <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+                    </Pressable>
+                    <TextInput
+                      style={styles.phoneInput}
+                      placeholderTextColor={colors.textSecondary}
+                      placeholder="77 123 4567"
+                      keyboardType="phone-pad"
+                      value={whatsappNumberInput}
+                      onChangeText={setWhatsappNumberInput}
+                    />
+                  </View>
+                  <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.rowPressed]} onPress={handleUpdateWhatsapp} disabled={loading}>
+                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Save Number</Text>}
+                  </Pressable>
+                </View>
+              )}
+
+              {activeModal === 'ADD_LOCATION' && (
+                <View>
+                  <View style={styles.infoBanner}>
+                    <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8, marginTop: 1 }} />
+                    <Text style={styles.infoBannerText}>Select your province and city so buyers and sellers know roughly where you are.</Text>
+                  </View>
+
+                  <Text style={styles.fieldLabel}>Province</Text>
+                  <Pressable style={styles.dropdownSelector} onPress={() => setProvincePickerVisible(true)}>
+                    <Text style={selectedProvince ? styles.dropdownSelectedText : styles.dropdownPlaceholderText}>
+                      {selectedProvince || 'Select Province'}
+                    </Text>
                     <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
                   </Pressable>
-                  <TextInput style={styles.phoneInput} placeholderTextColor={colors.textSecondary} placeholder="77 123 4567" keyboardType="phone-pad" value={whatsappNumberInput} onChangeText={setWhatsappNumberInput} />
+
+                  <Text style={styles.fieldLabel}>City</Text>
+                  <Pressable
+                    style={[styles.dropdownSelector, !selectedProvince && styles.dropdownDisabled]}
+                    onPress={() => selectedProvince && setCityPickerVisible(true)}
+                    disabled={!selectedProvince}
+                  >
+                    <Text style={selectedCity ? styles.dropdownSelectedText : styles.dropdownPlaceholderText}>
+                      {selectedCity || (selectedProvince ? 'Select City' : 'Select a province first')}
+                    </Text>
+                    <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
+                  </Pressable>
+
+                  <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.rowPressed]} onPress={handleUpdateLocation} disabled={loading}>
+                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Save Location</Text>}
+                  </Pressable>
                 </View>
-                <Pressable style={styles.modalButton} onPress={handleUpdateWhatsapp} disabled={loading}>
-                  {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Save Number</Text>}
-                </Pressable>
-              </>
-            )}
+              )}
 
-            {activeModal === 'ADD_LOCATION' && (
-              <>
-                <Text style={{ color: colors.textSecondary, marginBottom: 16, fontSize: 14, lineHeight: 20 }}>
-                  Select your province and city so buyers/sellers know roughly where you are.
-                </Text>
-                <Text style={styles.fieldLabel}>Province</Text>
-                <Pressable style={styles.dropdownSelector} onPress={() => setProvincePickerVisible(true)}>
-                  <Text style={selectedProvince ? styles.dropdownSelectedText : styles.dropdownPlaceholderText}>{selectedProvince || 'Select Province'}</Text>
-                  <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
-                </Pressable>
-                <Text style={styles.fieldLabel}>City</Text>
-                <Pressable style={[styles.dropdownSelector, !selectedProvince && styles.dropdownDisabled]} onPress={() => selectedProvince && setCityPickerVisible(true)} disabled={!selectedProvince}>
-                  <Text style={selectedCity ? styles.dropdownSelectedText : styles.dropdownPlaceholderText}>{selectedCity || (selectedProvince ? 'Select City' : 'Select a province first')}</Text>
-                  <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
-                </Pressable>
-                <Pressable style={[styles.modalButton, { marginTop: 8 }]} onPress={handleUpdateLocation} disabled={loading}>
-                  {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Save Location</Text>}
-                </Pressable>
-              </>
-            )}
+              {activeModal === 'CHANGE_PASSWORD' && (
+                step === 'INPUT' ? (
+                  <View>
+                    <Text style={styles.fieldLabel}>New Password</Text>
+                    <View style={styles.inputWrap}>
+                      <Ionicons name="lock-closed-outline" size={18} color={colors.textSecondary} />
+                      <TextInput
+                        style={styles.inputField}
+                        placeholderTextColor={colors.textSecondary}
+                        placeholder="At least 6 characters"
+                        secureTextEntry
+                        value={newPassword}
+                        onChangeText={setNewPassword}
+                      />
+                    </View>
+                    <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.rowPressed]} onPress={handleSendPasswordOtp} disabled={loading}>
+                      {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Send OTP</Text>}
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View>
+                    <Text style={styles.fieldLabel}>Verification Code</Text>
+                    <TextInput
+                      style={styles.otpInput}
+                      placeholderTextColor={colors.textSecondary}
+                      placeholder="——————"
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      value={otpCode}
+                      onChangeText={setOtpCode}
+                      textContentType="oneTimeCode"
+                      autoComplete="sms-otp"
+                      importantForAutofill="yes"
+                    />
+                    <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.rowPressed]} onPress={handleVerifyPasswordOtp} disabled={loading}>
+                      {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Verify & Change</Text>}
+                    </Pressable>
+                  </View>
+                )
+              )}
 
-            {activeModal === 'CHANGE_PASSWORD' && (
-              step === 'INPUT' ? (
-                <>
-                  <TextInput style={styles.input} placeholderTextColor={colors.textSecondary} placeholder="New Password" secureTextEntry value={newPassword} onChangeText={setNewPassword} />
-                  <Pressable style={styles.modalButton} onPress={handleSendPasswordOtp} disabled={loading}>
-                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Send OTP</Text>}
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  <TextInput style={styles.input} placeholderTextColor={colors.textSecondary} placeholder="6-Digit OTP" keyboardType="number-pad" maxLength={6} value={otpCode} onChangeText={setOtpCode} textContentType="oneTimeCode" autoComplete="sms-otp" importantForAutofill="yes" />
-                  <Pressable style={styles.modalButton} onPress={handleVerifyPasswordOtp} disabled={loading}>
-                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Verify & Change</Text>}
-                  </Pressable>
-                </>
-              )
-            )}
-
-            {activeModal === 'DELETE_ACCOUNT' && (
-              step === 'INPUT' ? (
-                <>
-                  <Text style={{ color: colors.danger, marginBottom: 16, fontSize: 15, lineHeight: 22, fontWeight: '500' }}>
-                    Are you sure you want to delete your account? This action is permanent and cannot be undone. All your data and images will be erased.
-                  </Text>
-                  <Pressable style={[styles.modalButton, { backgroundColor: colors.danger }]} onPress={handleSendDeleteOtp} disabled={loading}>
-                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Yes, Send OTP</Text>}
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  <Text style={{ color: colors.danger, marginBottom: 12 }}>Enter the 6-digit code sent to your phone to confirm deletion.</Text>
-                  <TextInput style={styles.input} placeholderTextColor={colors.textSecondary} placeholder="6-Digit OTP" keyboardType="number-pad" maxLength={6} value={otpCode} onChangeText={setOtpCode} textContentType="oneTimeCode" autoComplete="sms-otp" importantForAutofill="yes" />
-                  <Pressable style={[styles.modalButton, { backgroundColor: colors.danger }]} onPress={handleVerifyDeleteOtp} disabled={loading}>
-                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Verify & Delete Account</Text>}
-                  </Pressable>
-                </>
-              )
-            )}
-          </View>
-        </View>
+              {activeModal === 'DELETE_ACCOUNT' && (
+                step === 'INPUT' ? (
+                  <View>
+                    <View style={styles.dangerBanner}>
+                      <Ionicons name="warning-outline" size={18} color={colors.danger} />
+                      <Text style={styles.dangerBannerText}>
+                        This action is permanent and cannot be undone. All your data and images will be erased.
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.danger }, pressed && styles.rowPressed]}
+                      onPress={handleSendDeleteOtp}
+                      disabled={loading}
+                    >
+                      {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Yes, Send OTP</Text>}
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View>
+                    <Text style={styles.fieldLabel}>Verification Code</Text>
+                    <Text style={styles.infoBannerText}>Enter the 6-digit code sent to your phone to confirm deletion.</Text>
+                    <TextInput
+                      style={[styles.otpInput, { marginTop: 14 }]}
+                      placeholderTextColor={colors.textSecondary}
+                      placeholder="——————"
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      value={otpCode}
+                      onChangeText={setOtpCode}
+                      textContentType="oneTimeCode"
+                      autoComplete="sms-otp"
+                      importantForAutofill="yes"
+                    />
+                    <Pressable
+                      style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.danger }, pressed && styles.rowPressed]}
+                      onPress={handleVerifyDeleteOtp}
+                      disabled={loading}
+                    >
+                      {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Verify & Delete Account</Text>}
+                    </Pressable>
+                  </View>
+                )
+              )}
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* COUNTRY CODE PICKER */}
-      <Modal visible={countryPickerVisible} animationType="fade" transparent>
-        <Pressable style={styles.modalOverlay} onPress={() => setCountryPickerVisible(false)}>
-          <View style={styles.pickerCard}>
-            <Text style={styles.modalTitle}>Select Country Code</Text>
+      <Modal visible={countryPickerVisible} animationType="slide" transparent onRequestClose={() => setCountryPickerVisible(false)}>
+        <Pressable style={styles.sheetOverlay} onPress={() => setCountryPickerVisible(false)}>
+          <Pressable style={styles.sheetCard} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Select Country Code</Text>
+              <Pressable style={styles.sheetCloseBtn} onPress={() => setCountryPickerVisible(false)}>
+                <Ionicons name="close" size={20} color={colors.text} />
+              </Pressable>
+            </View>
             <FlatList
               data={COUNTRY_CODES}
               keyExtractor={(item) => item.code + item.country}
-              style={{ marginTop: 12, maxHeight: 320 }}
-              renderItem={({ item }) => (
-                <Pressable style={styles.countryRow} onPress={() => { setWhatsappCode(item.code); setCountryPickerVisible(false); }}>
-                  <Text style={styles.countryFlag}>{item.flag}</Text>
-                  <Text style={styles.countryName}>{item.country}</Text>
-                  <Text style={styles.countryCode}>{item.code}</Text>
-                </Pressable>
-              )}
+              style={styles.pickerList}
+              renderItem={({ item }) => {
+                const selected = item.code === whatsappCode;
+                return (
+                  <Pressable
+                    style={({ pressed }) => [styles.pickerRow, pressed && styles.rowPressed]}
+                    onPress={() => { setWhatsappCode(item.code); setCountryPickerVisible(false); }}
+                  >
+                    <Text style={styles.countryFlag}>{item.flag}</Text>
+                    <Text style={styles.pickerRowText}>{item.country}</Text>
+                    <Text style={styles.pickerRowMeta}>{item.code}</Text>
+                    {selected && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+                  </Pressable>
+                );
+              }}
             />
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
 
-      <Modal visible={provincePickerVisible} animationType="fade" transparent>
-        <Pressable style={styles.modalOverlay} onPress={() => setProvincePickerVisible(false)}>
-          <View style={styles.pickerCard}>
-            <Text style={styles.modalTitle}>Select Province</Text>
+      {/* PROVINCE PICKER */}
+      <Modal visible={provincePickerVisible} animationType="slide" transparent onRequestClose={() => setProvincePickerVisible(false)}>
+        <Pressable style={styles.sheetOverlay} onPress={() => setProvincePickerVisible(false)}>
+          <Pressable style={styles.sheetCard} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Select Province</Text>
+              <Pressable style={styles.sheetCloseBtn} onPress={() => setProvincePickerVisible(false)}>
+                <Ionicons name="close" size={20} color={colors.text} />
+              </Pressable>
+            </View>
             <FlatList
               data={PROVINCES}
               keyExtractor={(item) => item}
-              style={{ marginTop: 12, maxHeight: 320 }}
-              renderItem={({ item }) => (
-                <Pressable style={styles.countryRow} onPress={() => { setSelectedProvince(item); setSelectedCity(''); setProvincePickerVisible(false); }}>
-                  <Text style={styles.countryName}>{item}</Text>
-                </Pressable>
-              )}
+              style={styles.pickerList}
+              renderItem={({ item }) => {
+                const selected = item === selectedProvince;
+                return (
+                  <Pressable
+                    style={({ pressed }) => [styles.pickerRow, pressed && styles.rowPressed]}
+                    onPress={() => { setSelectedProvince(item); setSelectedCity(''); setProvincePickerVisible(false); }}
+                  >
+                    <Text style={styles.pickerRowText}>{item}</Text>
+                    {selected && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+                  </Pressable>
+                );
+              }}
             />
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
 
-      <Modal visible={cityPickerVisible} animationType="fade" transparent>
-        <Pressable style={styles.modalOverlay} onPress={() => setCityPickerVisible(false)}>
-          <View style={styles.pickerCard}>
-            <Text style={styles.modalTitle}>Select City</Text>
+      {/* CITY PICKER */}
+      <Modal visible={cityPickerVisible} animationType="slide" transparent onRequestClose={() => setCityPickerVisible(false)}>
+        <Pressable style={styles.sheetOverlay} onPress={() => setCityPickerVisible(false)}>
+          <Pressable style={styles.sheetCard} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Select City</Text>
+              <Pressable style={styles.sheetCloseBtn} onPress={() => setCityPickerVisible(false)}>
+                <Ionicons name="close" size={20} color={colors.text} />
+              </Pressable>
+            </View>
             <FlatList
               data={PROVINCE_CITY_MAP[selectedProvince] || []}
               keyExtractor={(item) => item}
-              style={{ marginTop: 12, maxHeight: 320 }}
-              renderItem={({ item }) => (
-                <Pressable style={styles.countryRow} onPress={() => { setSelectedCity(item); setCityPickerVisible(false); }}>
-                  <Text style={styles.countryName}>{item}</Text>
-                </Pressable>
-              )}
+              style={styles.pickerList}
+              renderItem={({ item }) => {
+                const selected = item === selectedCity;
+                return (
+                  <Pressable
+                    style={({ pressed }) => [styles.pickerRow, pressed && styles.rowPressed]}
+                    onPress={() => { setSelectedCity(item); setCityPickerVisible(false); }}
+                  >
+                    <Text style={styles.pickerRowText}>{item}</Text>
+                    {selected && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+                  </Pressable>
+                );
+              }}
             />
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </ScrollView>
   );
 }
 
-// Convert static StyleSheet to dynamic factory matching the Theme
+const cardShadow = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.06,
+  shadowRadius: 12,
+  elevation: 3,
+};
+
 const createStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  scrollContent: { padding: 22, paddingTop: 60, paddingBottom: 60 },
-  headerTitle: { fontSize: 26, fontWeight: '800', color: colors.text, marginBottom: 20 },
-  card: { backgroundColor: colors.card, borderRadius: 20, padding: 20, elevation: 3, marginBottom: 20 },
-  avatarContainer: { alignSelf: 'center', position: 'relative', marginBottom: 10 },
-  avatarImage: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.border },
-  editBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.text, width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.card },
-  userName: { fontSize: 20, fontWeight: '700', color: colors.text, textAlign: 'center', marginTop: 8 },
-  userPhone: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: 20 },
-  currencyToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
-  currencyToggleButtons: { flexDirection: 'row' },
-  currencyOption: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: colors.inputBg, marginLeft: 8 },
-  currencyOptionActive: { backgroundColor: colors.primary },
-  currencyOptionText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
-  currencyOptionTextActive: { color: '#FFFFFF' },
-  actionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
-  actionText: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: '600', color: colors.text },
-  actionValue: { fontSize: 13, color: colors.textSecondary, marginRight: 6 },
-  logoutButton: { backgroundColor: colors.inputBg, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 24 },
-  logoutText: { color: colors.textSecondary, fontWeight: '700', fontSize: 15 },
-  modalOverlay: { flex: 1, backgroundColor: colors.modalOverlay, justifyContent: 'center', padding: 20 },
-  modalCard: { backgroundColor: colors.card, borderRadius: 20, padding: 20 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
-  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, fontSize: 15, color: colors.text, marginBottom: 16, backgroundColor: colors.inputBg },
-  modalButton: { backgroundColor: colors.primary, padding: 14, borderRadius: 12, alignItems: 'center' },
-  buttonText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
-  phoneRow: { flexDirection: 'row', marginBottom: 16 },
-  codeSelector: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.inputBg, borderRadius: 12, paddingHorizontal: 12, marginRight: 8, minWidth: 78, justifyContent: 'space-between' },
-  codeSelectorText: { fontSize: 15, fontWeight: '600', color: colors.text, marginRight: 4 },
-  phoneInput: { flex: 1, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.inputBg, borderRadius: 12, padding: 12, fontSize: 15, color: colors.text },
-  pickerCard: { backgroundColor: colors.card, borderRadius: 20, padding: 20, maxHeight: '70%' },
-  countryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-  countryFlag: { fontSize: 20, marginRight: 10 },
-  countryName: { flex: 1, fontSize: 15, color: colors.text, fontWeight: '500' },
-  countryCode: { fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6, marginTop: 4 },
-  dropdownSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.inputBg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 14, marginBottom: 16 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 60 },
+
+  topBar: { marginBottom: 22 },
+  topBarEyebrow: { fontSize: 12.5, fontWeight: '700', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 },
+  topBarTitle: { fontSize: 26, fontWeight: '800', color: colors.text },
+
+  loadingState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  loadingStateText: { marginTop: 12, fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
+
+  // Hero card
+  heroCard: {
+    backgroundColor: colors.card, borderRadius: 28, paddingTop: 40, paddingBottom: 26, paddingHorizontal: 20,
+    alignItems: 'center', marginBottom: 16, overflow: 'hidden', position: 'relative', ...cardShadow,
+  },
+  heroBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, height: 92, backgroundColor: colors.primary, opacity: 0.1 },
+  avatarWrapper: { marginBottom: 12, position: 'relative' },
+  avatarImage: { width: 88, height: 88, borderRadius: 44, backgroundColor: colors.border, borderWidth: 4, borderColor: colors.card },
+  avatarPlaceholder: {
+    width: 88, height: 88, borderRadius: 44, backgroundColor: colors.inputBg, borderWidth: 4, borderColor: colors.card,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  editBadge: {
+    position: 'absolute', bottom: -2, right: -2, backgroundColor: colors.primary, width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: colors.card,
+  },
+  userName: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: 'center', marginBottom: 8 },
+  phonePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.inputBg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
+  userPhone: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginLeft: 5 },
+
+  // Wallet card
+  walletCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: 20, padding: 16,
+    marginBottom: 16, overflow: 'hidden', position: 'relative', ...cardShadow,
+  },
+  walletBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.primary, opacity: 0.06 },
+  walletIconBadge: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  walletTextWrap: { flex: 1, marginRight: 8 },
+  walletLabel: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 2 },
+  walletSub: { fontSize: 12.5, color: colors.textSecondary },
+  walletValue: { fontSize: 20, fontWeight: '800', color: colors.primary, marginRight: 6 },
+
+  // Section cards
+  sectionCard: { backgroundColor: colors.card, borderRadius: 20, padding: 18, marginBottom: 16, ...cardShadow },
+  sectionLabel: { fontSize: 12.5, fontWeight: '800', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 14 },
+
+  prefRow: { marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  prefRowLast: { marginBottom: 0, paddingBottom: 0, borderBottomWidth: 0 },
+  prefRowLabel: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  prefRowText: { fontSize: 14, fontWeight: '600', color: colors.text, marginLeft: 6 },
+  segmented: { flexDirection: 'row', backgroundColor: colors.inputBg, borderRadius: 12, padding: 3 },
+  segment: { flex: 1, paddingVertical: 8, borderRadius: 9, alignItems: 'center', marginHorizontal: 1 },
+  segmentActive: { backgroundColor: colors.primary },
+  segmentText: { fontSize: 12.5, fontWeight: '700', color: colors.textSecondary },
+  segmentTextActive: { color: '#FFFFFF' },
+
+  // List rows
+  listRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: colors.border },
+  listRowLast: { borderBottomWidth: 0, paddingBottom: 0 },
+  rowPressed: { opacity: 0.6 },
+  rowIconBadge: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.inputBg, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  rowTextWrap: { flex: 1, marginRight: 8 },
+  rowTitle: { fontSize: 14.5, fontWeight: '700', color: colors.text },
+  rowSubtitle: { fontSize: 12.5, color: colors.textSecondary, marginTop: 2 },
+
+  // Bottom sheets
+  sheetOverlay: { flex: 1, backgroundColor: colors.modalOverlay, justifyContent: 'flex-end' },
+  sheetCard: {
+    backgroundColor: colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 32, width: '100%',
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 8,
+  },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 16 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  sheetTitle: { fontSize: 18, fontWeight: '800', color: colors.text, flex: 1 },
+  sheetCloseBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.inputBg, alignItems: 'center', justifyContent: 'center', marginLeft: 12 },
+
+  sheetListRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  sheetRowIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: colors.inputBg, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  sheetRowText: { flex: 1, fontSize: 14.5, fontWeight: '700', color: colors.text, marginRight: 8 },
+  logoutButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.inputBg,
+    borderRadius: 14, paddingVertical: 15, marginTop: 20,
+  },
+  logoutText: { color: colors.textSecondary, fontWeight: '800', fontSize: 15, marginLeft: 8 },
+
+  // Form fields
+  fieldLabel: { fontSize: 11.5, fontWeight: '800', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 },
+  inputWrap: {
+    flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.inputBg,
+    borderRadius: 14, paddingHorizontal: 14, height: 52, marginBottom: 18,
+  },
+  inputField: { flex: 1, fontSize: 15.5, fontWeight: '500', color: colors.text, paddingVertical: 0, marginLeft: 10 },
+  otpInput: {
+    textAlign: 'center', fontSize: 22, fontWeight: '800', letterSpacing: 8, borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.inputBg, borderRadius: 14, paddingVertical: 16, color: colors.text, marginBottom: 18,
+  },
+
+  infoBanner: { flexDirection: 'row', backgroundColor: colors.inputBg, borderRadius: 14, padding: 12, marginBottom: 18, alignItems: 'flex-start' },
+  infoBannerText: { flex: 1, fontSize: 13, lineHeight: 18, color: colors.textSecondary, fontWeight: '500' },
+
+  dangerBanner: { flexDirection: 'row', borderWidth: 1.5, borderColor: colors.danger, borderRadius: 14, padding: 14, marginBottom: 18, alignItems: 'flex-start' },
+  dangerBannerText: { flex: 1, fontSize: 13.5, lineHeight: 19, color: colors.danger, fontWeight: '600', marginLeft: 10 },
+
+  primaryButton: { backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 15, alignItems: 'center', justifyContent: 'center' },
+  primaryButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
+
+  phoneRow: { flexDirection: 'row', marginBottom: 18 },
+  codeSelector: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.inputBg, borderRadius: 14, paddingHorizontal: 14, height: 52, minWidth: 84, marginRight: 10,
+  },
+  codeSelectorText: { fontSize: 15.5, fontWeight: '700', color: colors.text, marginRight: 4 },
+  phoneInput: {
+    flex: 1, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.inputBg, borderRadius: 14,
+    paddingHorizontal: 14, height: 52, fontSize: 15.5, fontWeight: '500', color: colors.text,
+  },
+
+  dropdownSelector: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.inputBg, borderRadius: 14, paddingHorizontal: 14, height: 52, marginBottom: 18,
+  },
   dropdownDisabled: { opacity: 0.5 },
-  dropdownSelectedText: { fontSize: 15, color: colors.text, fontWeight: '600' },
-  dropdownPlaceholderText: { fontSize: 15, color: colors.textSecondary },
+  dropdownSelectedText: { fontSize: 15.5, fontWeight: '700', color: colors.text },
+  dropdownPlaceholderText: { fontSize: 15.5, fontWeight: '500', color: colors.textSecondary },
+
+  // Pickers
+  pickerList: { marginTop: 4, maxHeight: 400 },
+  pickerRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  countryFlag: { fontSize: 20, marginRight: 10 },
+  pickerRowText: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text },
+  pickerRowMeta: { fontSize: 13.5, fontWeight: '700', color: colors.textSecondary, marginRight: 8 },
 });
