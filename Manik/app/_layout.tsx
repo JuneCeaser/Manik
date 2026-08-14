@@ -4,8 +4,11 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ThemeProvider } from '../context/ThemeContext'; // <-- ADDED
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
+import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 
 SplashScreen.preventAutoHideAsync();
+
+const REVENUECAT_API_KEY = "test_ZAnRJCpUrpAHHoQOYrUvRvWKpfz";
 
 function RootLayoutNav() {
   const { userToken, isLoading, hasOnboarded } = useAuth();
@@ -51,6 +54,12 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    // Initialize RevenueCat with the Test Store API Key
+    Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+    Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+  }, []);
+
   return (
     <SafeAreaProvider>
       <ThemeProvider> 

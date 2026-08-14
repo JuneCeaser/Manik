@@ -338,7 +338,7 @@ export default function ProfileScreen() {
           {/* Wallet / credits */}
           <Pressable
             style={({ pressed }) => [styles.walletCard, pressed && styles.rowPressed]}
-            onPress={() => router.push('/subscription')}
+            onPress={() => router.push('/buy-credits')}
           >
             <View style={styles.walletBackdrop} />
             <View style={styles.walletIconBadge}>
