@@ -91,21 +91,40 @@ export default function BuyCreditsScreen() {
   }
 
   // Handle RevenueCat Test Store Purchase
-  const handleRevenueCatPurchase = async (pkg: PurchasesPackage) => {
-    setLoading(true);
-    try {
-      const { customerInfo } = await Purchases.purchasePackage(pkg);
-      Alert.alert('Purchase Successful!', 'Your test transaction was completed via RevenueCat.');
+ const handleRevenueCatPurchase = async (pkg: PurchasesPackage) => {
+  setLoading(true);
+  try {
+    const { customerInfo } = await Purchases.purchasePackage(pkg);
+
+    // Purchase succeeded on RevenueCat's side — now tell our backend to grant credits
+    const res = await fetch(`${API_BASE_URL.replace('/auth', '')}/payments/revenuecat-confirm`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${userToken}`,
+      },
+      body: JSON.stringify({
+        amount: pkg.product.price,
+        productId: pkg.product.identifier,
+      }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      Alert.alert('Purchase Successful!', 'Your 30 Ad Credits have been added.');
       setPaymentMethod('NONE');
       fetchHistory();
-    } catch (error: any) {
-      if (!error.userCancelled) {
-        Alert.alert('Purchase Error', error.message);
-      }
-    } finally {
-      setLoading(false);
+    } else {
+      Alert.alert('Purchase Error', data.message || 'Purchase completed but credits could not be added. Please contact support.');
     }
-  };
+  } catch (error: any) {
+    if (!error.userCancelled) {
+      Alert.alert('Purchase Error', error.message);
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();

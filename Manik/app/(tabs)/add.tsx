@@ -355,11 +355,11 @@ export default function AddScreen() {
 
       const data = await res.json();
       if (res.status === 401) { logout(); return; }
-      if (res.status === 402 || data.code === 'INSUFFICIENT_CREDITS') {
-        return Alert.alert('Not Enough Ad Credits', data.message, [
-          { text: 'Cancel', style: 'cancel' }, { text: 'Get Credits', onPress: () => router.push('/subscription') },
-        ]);
-      }
+     if (res.status === 402 || data.code === 'INSUFFICIENT_CREDITS') {
+  return Alert.alert('Not Enough Ad Credits', data.message, [
+    { text: 'Cancel', style: 'cancel' }, { text: 'Get Credits', onPress: () => router.push('/buy-credits') },
+  ]);
+}
 
       if (data.success) {
         Alert.alert(isEditMode ? 'Ad Updated' : 'Ad Submitted', isEditMode ? 'Your changes were saved.' : 'Your gem has been submitted for admin approval.');

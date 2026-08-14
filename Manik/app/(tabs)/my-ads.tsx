@@ -149,7 +149,7 @@ export default function MyAdsScreen() {
       } else if (res.status === 402 || data.code === 'INSUFFICIENT_CREDITS') {
         Alert.alert('Not Enough Ad Credits', data.message, [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Get Credits', onPress: () => router.push('/subscription') },
+          { text: 'Get Credits', onPress: () => router.push('/buy-credits') },
         ]);
       } else {
         Alert.alert('Error', data.message || 'Could not push ad.');
@@ -166,7 +166,7 @@ export default function MyAdsScreen() {
     if (credits < 1) {
       Alert.alert('Not Enough Ad Credits', 'You need 1 ad credit to push your ad to the front.', [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Get Credits', onPress: () => router.push('/subscription') },
+       { text: 'Get Credits', onPress: () => router.push('/buy-credits') },
       ]);
       return;
     }

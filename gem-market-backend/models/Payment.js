@@ -15,7 +15,7 @@ const paymentSchema = new mongoose.Schema(
     },
     method: {
       type: String,
-      enum: ['PAYHERE', 'MANUAL_SLIP'],
+      enum: ['PAYHERE', 'MANUAL_SLIP', 'REVENUECAT'],
       required: true,
     },
     status: {
