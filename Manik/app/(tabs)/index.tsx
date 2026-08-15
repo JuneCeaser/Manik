@@ -4,8 +4,10 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,7 +21,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { API_BASE_URL } from '../../constants/api';
 import { formatDisplayPrice, getPreferredCurrency, fetchLiveExchangeRate } from '../../utils/currency';
-import { GEM_CATEGORIES } from '../../constants/gemOptions';
+import { GEM_CATEGORIES, GEM_COLORS, GEM_SHAPES, GEM_ORIGINS, GEM_CLARITIES } from '../../constants/gemOptions';
 
 const GEMS_URL = `${API_BASE_URL.replace('/auth', '')}/gems`;
 const FAVORITES_URL = `${API_BASE_URL.replace('/auth', '')}/favorites`;
@@ -36,6 +38,19 @@ type PublishedGemAd = {
   user: { name: string };
 };
 
+type FilterOverrides = Partial<{
+  category: string;
+  search: string;
+  minPrice: string;
+  maxPrice: string;
+  minCarat: string;
+  maxCarat: string;
+  color: string;
+  shape: string;
+  origin: string;
+  clarity: string;
+}>;
+
 const filterCategories = ['All', ...GEM_CATEGORIES];
 
 export default function HomeScreen() {
@@ -43,7 +58,7 @@ export default function HomeScreen() {
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
-  
+
   const [ads, setAds] = useState<PublishedGemAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,47 +68,96 @@ export default function HomeScreen() {
   const [prefCurrency, setPrefCurrency] = useState<'LKR' | 'USD'>('LKR');
   const [exchangeRate, setExchangeRate] = useState(300);
 
-  // Filters
+  // Core Filters
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Advanced Filters
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const [minCarat, setMinCarat] = useState('');
+  const [maxCarat, setMaxCarat] = useState('');
+  const [selectedColor, setSelectedColor] = useState('All');
+  const [selectedShape, setSelectedShape] = useState('All');
+  const [selectedOrigin, setSelectedOrigin] = useState('All');
+  const [selectedClarity, setSelectedClarity] = useState('All');
 
   // Pagination
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const fetchAds = useCallback(async (pageNumber = 1, currentCurrency = 'LKR', currentRate = 300) => {
-    if (pageNumber === 1) setLoading(true);
-    else setLoadingMore(true);
+  // fetchAds accepts explicit overrides so callers (like resetFilters) don't
+  // have to wait a render cycle for state to update before fetching.
+  const fetchAds = useCallback(
+    async (
+      pageNumber = 1,
+      currentCurrency: 'LKR' | 'USD' = 'LKR',
+      currentRate = 300,
+      overrides: FilterOverrides = {}
+    ) => {
+      if (pageNumber === 1) setLoading(true);
+      else setLoadingMore(true);
 
-    try {
-      let url = `${GEMS_URL}/published?page=${pageNumber}&limit=20&currency=${currentCurrency}&rate=${currentRate}`;
-      if (selectedCategory && selectedCategory !== 'All') url += `&category=${encodeURIComponent(selectedCategory)}`;
-      if (minPrice) url += `&minPrice=${minPrice}`;
-      if (maxPrice) url += `&maxPrice=${maxPrice}`;
+      const category = overrides.category ?? selectedCategory;
+      const search = overrides.search ?? searchQuery;
+      const minP = overrides.minPrice ?? minPrice;
+      const maxP = overrides.maxPrice ?? maxPrice;
+      const minC = overrides.minCarat ?? minCarat;
+      const maxC = overrides.maxCarat ?? maxCarat;
+      const color = overrides.color ?? selectedColor;
+      const shape = overrides.shape ?? selectedShape;
+      const origin = overrides.origin ?? selectedOrigin;
+      const clarity = overrides.clarity ?? selectedClarity;
 
-      const res = await fetch(url, {
-        headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        if (pageNumber === 1) {
-          setAds(data.gemAds); 
-        } else {
-          setAds((prev) => [...prev, ...data.gemAds]); 
+      try {
+        let url = `${GEMS_URL}/published?page=${pageNumber}&limit=20&currency=${currentCurrency}&rate=${currentRate}`;
+
+        if (category && category !== 'All') url += `&category=${encodeURIComponent(category)}`;
+        if (search.trim()) url += `&search=${encodeURIComponent(search.trim())}`;
+        if (minP) url += `&minPrice=${minP}`;
+        if (maxP) url += `&maxPrice=${maxP}`;
+        if (minC) url += `&minCarat=${minC}`;
+        if (maxC) url += `&maxCarat=${maxC}`;
+        if (color && color !== 'All') url += `&color=${encodeURIComponent(color)}`;
+        if (shape && shape !== 'All') url += `&shape=${encodeURIComponent(shape)}`;
+        if (origin && origin !== 'All') url += `&origin=${encodeURIComponent(origin)}`;
+        if (clarity && clarity !== 'All') url += `&clarity=${encodeURIComponent(clarity)}`;
+
+        const res = await fetch(url, {
+          headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          if (pageNumber === 1) setAds(data.gemAds);
+          else setAds((prev) => [...prev, ...data.gemAds]);
+
+          setHasMore(data.hasMore);
+          setPage(pageNumber);
         }
-        setHasMore(data.hasMore);
-        setPage(pageNumber);
+      } catch {
+        // Silently fail
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
       }
-    } catch {
-      // Silently fail
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  }, [userToken, selectedCategory, minPrice, maxPrice]);
+    },
+    [
+      userToken,
+      selectedCategory,
+      searchQuery,
+      minPrice,
+      maxPrice,
+      minCarat,
+      maxCarat,
+      selectedColor,
+      selectedShape,
+      selectedOrigin,
+      selectedClarity,
+    ]
+  );
 
   const fetchFavoriteIds = useCallback(async () => {
     if (!userToken) {
@@ -105,11 +169,8 @@ export default function HomeScreen() {
         headers: { Authorization: `Bearer ${userToken}` },
       });
       const data = await res.json();
-      if (data.success) {
-        setFavoriteIds(new Set<string>(data.gemAdIds));
-      }
-    } catch {
-    }
+      if (data.success) setFavoriteIds(new Set<string>(data.gemAdIds));
+    } catch {}
   }, [userToken]);
 
   useFocusEffect(
@@ -125,10 +186,28 @@ export default function HomeScreen() {
         fetchFavoriteIds();
         fetchAds(1, currentCurrency, currentRate);
       };
-      
+
       initParams();
-    }, [fetchFavoriteIds, selectedCategory, minPrice, maxPrice])
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fetchFavoriteIds, selectedCategory])
   );
+
+  // Debounced live search: fires automatically as the user types, including
+  // when they backspace all the way down to an empty string (which naturally
+  // omits the `search` param above and returns the unfiltered list).
+  const isFirstSearchRender = React.useRef(true);
+  React.useEffect(() => {
+    if (isFirstSearchRender.current) {
+      isFirstSearchRender.current = false;
+      return;
+    }
+    const handler = setTimeout(() => {
+      fetchAds(1, prefCurrency, exchangeRate);
+    }, 400);
+
+    return () => clearTimeout(handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -146,8 +225,35 @@ export default function HomeScreen() {
     }
   };
 
-  const applyPriceFilter = () => {
+  const applyFilters = () => {
+    setFilterModalVisible(false);
     fetchAds(1, prefCurrency, exchangeRate);
+  };
+
+  // Resets both the filter form fields AND immediately re-fetches the home
+  // screen results using explicit overrides (so it doesn't rely on stale
+  // state from before the reset).
+  const resetFilters = () => {
+    setMinPrice('');
+    setMaxPrice('');
+    setMinCarat('');
+    setMaxCarat('');
+    setSelectedColor('All');
+    setSelectedShape('All');
+    setSelectedOrigin('All');
+    setSelectedClarity('All');
+    setFilterModalVisible(false);
+
+    fetchAds(1, prefCurrency, exchangeRate, {
+      minPrice: '',
+      maxPrice: '',
+      minCarat: '',
+      maxCarat: '',
+      color: 'All',
+      shape: 'All',
+      origin: 'All',
+      clarity: 'All',
+    });
   };
 
   const toggleFavorite = async (adId: string) => {
@@ -199,11 +305,27 @@ export default function HomeScreen() {
     </Pressable>
   );
 
+  const FilterPills = ({ title, options, selected, onSelect }: any) => (
+    <View style={styles.filterPillSection}>
+      <Text style={styles.filterSectionTitle}>{title}</Text>
+      <View style={styles.pillWrap}>
+        <Pressable style={[styles.filterPill, selected === 'All' && styles.filterPillActive]} onPress={() => onSelect('All')}>
+          <Text style={[styles.filterPillText, selected === 'All' && styles.filterPillTextActive]}>All</Text>
+        </Pressable>
+        {options.map((opt: string) => (
+          <Pressable key={opt} style={[styles.filterPill, selected === opt && styles.filterPillActive]} onPress={() => onSelect(opt)}>
+            <Text style={[styles.filterPillText, selected === opt && styles.filterPillTextActive]}>{opt}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+
   const renderItem = ({ item }: { item: PublishedGemAd }) => {
     const isFavorited = favoriteIds.has(item._id);
     return (
-      <Pressable 
-        style={styles.card} 
+      <Pressable
+        style={styles.card}
         onPress={() => router.push({ pathname: '/gem/gem-details', params: { id: item._id } })}
       >
         <View style={styles.imageWrapper}>
@@ -238,6 +360,29 @@ export default function HomeScreen() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Text style={styles.headerTitle}>Manik Gem Market</Text>
 
+      {/* Search & Filter Row */}
+      <View style={styles.searchRow}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color={colors.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search gems..."
+            placeholderTextColor={colors.textSecondary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+          />
+          {searchQuery ? (
+            <Pressable onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+            </Pressable>
+          ) : null}
+        </View>
+        <Pressable style={styles.filterButton} onPress={() => setFilterModalVisible(true)}>
+          <Ionicons name="options" size={22} color="#FFF" />
+        </Pressable>
+      </View>
+
       <View style={styles.filterSection}>
         <FlatList
           data={filterCategories}
@@ -247,26 +392,6 @@ export default function HomeScreen() {
           contentContainerStyle={styles.categoryList}
           renderItem={renderCategoryItem}
         />
-        <View style={styles.priceFilterRow}>
-          <TextInput
-            style={styles.priceInput}
-            placeholder={`Min Price (${prefCurrency})`}
-            placeholderTextColor={colors.textSecondary}
-            keyboardType="numeric"
-            value={minPrice}
-            onChangeText={setMinPrice}
-          />
-          <Text style={styles.priceDivider}>-</Text>
-          <TextInput
-            style={styles.priceInput}
-            placeholder={`Max Price (${prefCurrency})`}
-            placeholderTextColor={colors.textSecondary}
-            keyboardType="numeric"
-            value={maxPrice}
-            onChangeText={setMaxPrice}
-          />
-        
-        </View>
       </View>
 
       {loading && page === 1 ? (
@@ -297,6 +422,48 @@ export default function HomeScreen() {
           }
         />
       )}
+
+      {/* Advanced Filter Modal */}
+      <Modal visible={filterModalVisible} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={resetFilters} hitSlop={10}>
+              <Text style={styles.modalResetText}>Reset</Text>
+            </Pressable>
+            <Text style={styles.modalTitle}>Advanced Filters</Text>
+            <Pressable onPress={() => setFilterModalVisible(false)} hitSlop={10}>
+              <Ionicons name="close" size={26} color={colors.text} />
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <Text style={styles.filterSectionTitle}>Price Range ({prefCurrency})</Text>
+            <View style={styles.inputRow}>
+              <TextInput style={styles.filterInput} placeholder="Min Price" keyboardType="numeric" value={minPrice} onChangeText={setMinPrice} placeholderTextColor={colors.textSecondary}/>
+              <Text style={styles.inputDivider}>-</Text>
+              <TextInput style={styles.filterInput} placeholder="Max Price" keyboardType="numeric" value={maxPrice} onChangeText={setMaxPrice} placeholderTextColor={colors.textSecondary}/>
+            </View>
+
+            <Text style={styles.filterSectionTitle}>Carat Weight (ct)</Text>
+            <View style={styles.inputRow}>
+              <TextInput style={styles.filterInput} placeholder="Min Carat" keyboardType="numeric" value={minCarat} onChangeText={setMinCarat} placeholderTextColor={colors.textSecondary}/>
+              <Text style={styles.inputDivider}>-</Text>
+              <TextInput style={styles.filterInput} placeholder="Max Carat" keyboardType="numeric" value={maxCarat} onChangeText={setMaxCarat} placeholderTextColor={colors.textSecondary}/>
+            </View>
+
+            <FilterPills title="Color" options={GEM_COLORS} selected={selectedColor} onSelect={setSelectedColor} />
+            <FilterPills title="Shape & Cut" options={GEM_SHAPES} selected={selectedShape} onSelect={setSelectedShape} />
+            <FilterPills title="Origin" options={GEM_ORIGINS} selected={selectedOrigin} onSelect={setSelectedOrigin} />
+            <FilterPills title="Clarity" options={GEM_CLARITIES} selected={selectedClarity} onSelect={setSelectedClarity} />
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <Pressable style={styles.applyButton} onPress={applyFilters}>
+              <Text style={styles.applyButtonText}>Show Results</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -304,16 +471,19 @@ export default function HomeScreen() {
 const createStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   headerTitle: { fontSize: 22, fontWeight: '800', color: colors.text, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
-  filterSection: { paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+
+  searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginTop: 8, marginBottom: 4 },
+  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.inputBg, borderRadius: 12, paddingHorizontal: 12, height: 44, borderWidth: 1, borderColor: colors.border },
+  searchInput: { flex: 1, marginLeft: 8, fontSize: 14, color: colors.text },
+  filterButton: { width: 44, height: 44, backgroundColor: colors.primary, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
+
+  filterSection: { paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: colors.border },
   categoryList: { paddingHorizontal: 16, paddingVertical: 10 },
   categoryPill: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.inputBg, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: colors.border },
   categoryPillActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   categoryText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   categoryTextActive: { color: '#FFFFFF' },
-  priceFilterRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginTop: 4 },
-  priceInput: { flex: 1, height: 40, backgroundColor: colors.inputBg, borderRadius: 10, paddingHorizontal: 12, fontSize: 13, color: colors.text, borderWidth: 1, borderColor: colors.border },
-  priceDivider: { marginHorizontal: 8, color: colors.textSecondary, fontWeight: '700' },
-  applyFilterButton: { width: 40, height: 40, backgroundColor: colors.primary, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
+
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 100 },
   emptyText: { marginTop: 12, fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
   listContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40, flexGrow: 1 },
@@ -330,4 +500,26 @@ const createStyles = (colors: any) => StyleSheet.create({
   cardMetaDot: { fontSize: 11, color: colors.border, marginHorizontal: 4 },
   cardLocationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   cardLocation: { fontSize: 11, color: colors.textSecondary, marginLeft: 3, flexShrink: 1 },
+
+  // Modal Styles
+  modalContainer: { flex: 1 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
+  modalResetText: { fontSize: 15, fontWeight: '600', color: colors.danger },
+  modalContent: { padding: 20, paddingBottom: 100 },
+  filterSectionTitle: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
+  filterInput: { flex: 1, height: 46, backgroundColor: colors.inputBg, borderRadius: 12, paddingHorizontal: 14, fontSize: 14, color: colors.text, borderWidth: 1, borderColor: colors.border },
+  inputDivider: { marginHorizontal: 12, color: colors.textSecondary, fontWeight: '700' },
+
+  filterPillSection: { marginBottom: 24 },
+  pillWrap: { flexDirection: 'row', flexWrap: 'wrap' },
+  filterPill: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.inputBg, borderRadius: 20, marginRight: 8, marginBottom: 10, borderWidth: 1, borderColor: colors.border },
+  filterPillActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterPillText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  filterPillTextActive: { color: '#FFFFFF' },
+
+  modalFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
+  applyButton: { backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+  applyButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 });

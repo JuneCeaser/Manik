@@ -83,7 +83,7 @@ exports.createGemAd = async (req, res) => {
       hidePhoneNumber: !!hidePhoneNumber,
       status: 'PENDING',
       creditsUsed: requiredCredits,
-      bumpedAt: Date.now(), // Sets initial bump to creation time
+      bumpedAt: Date.now(), 
     });
 
     user.adCredits -= requiredCredits;
@@ -98,7 +98,6 @@ exports.createGemAd = async (req, res) => {
 
 exports.getMyGemAds = async (req, res) => {
   try {
-    // Sorts by bumpedAt so pushed/edited ads jump to the top of "My Ads"
     const gemAds = await GemAd.find({ user: req.user._id }).sort({ bumpedAt: -1, createdAt: -1 });
     return res.json({ success: true, gemAds });
   } catch (err) {
@@ -116,6 +115,7 @@ exports.getGemAdById = async (req, res) => {
   }
 };
 
+// --- ADVANCED SEARCH & FILTER ADDED HERE ---
 exports.getPublishedGemAds = async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
@@ -130,19 +130,37 @@ exports.getPublishedGemAds = async (req, res) => {
 
     let query = { status: 'APPROVED' };
 
-    // Filter by exact category match if provided
-    if (category && category !== 'All') {
-      query.category = category;
+    // 1. Text Search (Matches Title or Description)
+    if (req.query.search) {
+      query.$or = [
+        { title: { $regex: req.query.search, $options: 'i' } },
+        { description: { $regex: req.query.search, $options: 'i' } }
+      ];
     }
 
-    // Sort by bumpedAt so pushed ads jump to the top of the market
+    // 2. Exact Match Filters
+    if (category && category !== 'All') query.category = category;
+    if (req.query.color && req.query.color !== 'All') query.color = req.query.color;
+    if (req.query.shape && req.query.shape !== 'All') query.shape = req.query.shape;
+    if (req.query.origin && req.query.origin !== 'All') query.origin = req.query.origin;
+    if (req.query.clarity && req.query.clarity !== 'All') query.clarity = req.query.clarity;
+
+    // 3. Carat Weight Range Filter
+    const minCarat = parseFloat(req.query.minCarat);
+    const maxCarat = parseFloat(req.query.maxCarat);
+    if (!isNaN(minCarat) || !isNaN(maxCarat)) {
+      query.weightCarats = {};
+      if (!isNaN(minCarat)) query.weightCarats.$gte = minCarat;
+      if (!isNaN(maxCarat)) query.weightCarats.$lte = maxCarat;
+    }
+
     const gemAds = await GemAd.find(query)
       .populate('user', 'name')
       .sort({ bumpedAt: -1, createdAt: -1 });
 
     let filteredAds = gemAds;
 
-    // Cross-currency price filter logic
+    // 4. In-Memory Currency Price Filter (Handles USD vs LKR conversion)
     if (!isNaN(minPrice) || !isNaN(maxPrice)) {
       filteredAds = filteredAds.filter(ad => {
         let adAmountInPref = ad.price.amount;
@@ -164,6 +182,7 @@ exports.getPublishedGemAds = async (req, res) => {
 
     return res.json({ success: true, gemAds: paginatedAds, hasMore });
   } catch (err) {
+    console.error('getPublishedGemAds error:', err);
     return res.status(500).json({ success: false, message: 'Could not fetch ads.' });
   }
 };
@@ -180,7 +199,6 @@ exports.getPublicGemAdById = async (req, res) => {
   }
 };
 
-// NEW LOGIC TO DEDUCT CREDIT AND PUSH AD
 exports.pushGemAd = async (req, res) => {
   try {
     const gemAd = await GemAd.findOne({ _id: req.params.id, user: req.user._id });
@@ -192,11 +210,9 @@ exports.pushGemAd = async (req, res) => {
       return res.status(402).json({ success: false, code: 'INSUFFICIENT_CREDITS', message: 'You need at least 1 ad credit to push an ad.' });
     }
 
-    // Deduct 1 credit
     user.adCredits -= 1;
     await user.save();
 
-    // Bump the ad
     gemAd.bumpedAt = Date.now();
     await gemAd.save();
 
@@ -264,7 +280,7 @@ exports.updateGemAd = async (req, res) => {
     }
 
     gemAd.status = 'PENDING';
-    gemAd.bumpedAt = Date.now(); // Updating an ad also resets its position
+    gemAd.bumpedAt = Date.now(); 
     await gemAd.save();
 
     return res.json({ success: true, message: 'Ad updated and resubmitted.', gemAd });
