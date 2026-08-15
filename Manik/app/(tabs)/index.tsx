@@ -1,9 +1,8 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   Modal,
   Pressable,
   RefreshControl,
@@ -13,6 +12,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
+// expo-image caches and recycles images far better than the core RN Image
+// component in long lists — swap back to `Image` from 'react-native' if
+// you don't have expo-image installed (`npx expo install expo-image`).
+import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,10 +56,92 @@ type FilterOverrides = Partial<{
 
 const filterCategories = ['All', ...GEM_CATEGORIES];
 
+// Hoisted outside HomeScreen and memoized: this stops every card from being
+// recreated (and RN reconciling all of them) on every parent re-render —
+// e.g. every keystroke in search, every favorite toggle, every filter tap.
+// It only re-renders a given card when ITS OWN props actually change.
+type GemCardProps = {
+  item: PublishedGemAd;
+  isFavorited: boolean;
+  prefCurrency: 'LKR' | 'USD';
+  exchangeRate: number;
+  styles: ReturnType<typeof createStyles>;
+  colors: any;
+  onPress: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
+};
+
+const GemCard = React.memo(
+  ({ item, isFavorited, prefCurrency, exchangeRate, styles, colors, onPress, onToggleFavorite }: GemCardProps) => (
+    <Pressable style={styles.card} onPress={() => onPress(item._id)}>
+      <View style={styles.imageWrapper}>
+        <Image
+          source={{ uri: item.images[0]?.url }}
+          style={styles.cardImage}
+          contentFit="cover"
+          transition={150}
+        />
+        <Pressable style={styles.heartButton} onPress={() => onToggleFavorite(item._id)}>
+          <Ionicons
+            name={isFavorited ? 'heart' : 'heart-outline'}
+            size={18}
+            color={isFavorited ? colors.danger : colors.textSecondary}
+          />
+        </Pressable>
+      </View>
+      <View style={styles.cardBody}>
+        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+        <Text style={styles.cardPrice}>{formatDisplayPrice(item.price, prefCurrency, exchangeRate)}</Text>
+        <View style={styles.cardMetaRow}>
+          <Text style={styles.cardMeta} numberOfLines={1}>{item.category}</Text>
+          <Text style={styles.cardMetaDot}>•</Text>
+          <Text style={styles.cardMeta}>{item.weightCarats}ct</Text>
+        </View>
+        <View style={styles.cardLocationRow}>
+          <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
+          <Text style={styles.cardLocation} numberOfLines={1}>{item.location.city}, {item.location.province}</Text>
+        </View>
+      </View>
+    </Pressable>
+  )
+);
+GemCard.displayName = 'GemCard';
+
+// Also hoisted + memoized: previously redefined on every HomeScreen render,
+// four times (Color / Shape / Origin / Clarity), each remounting its pills.
+type FilterPillsProps = {
+  title: string;
+  options: string[];
+  selected: string;
+  onSelect: (value: string) => void;
+  styles: ReturnType<typeof createStyles>;
+};
+
+const FilterPills = React.memo(({ title, options, selected, onSelect, styles }: FilterPillsProps) => (
+  <View style={styles.filterPillSection}>
+    <Text style={styles.filterSectionTitle}>{title}</Text>
+    <View style={styles.pillWrap}>
+      <Pressable style={[styles.filterPill, selected === 'All' && styles.filterPillActive]} onPress={() => onSelect('All')}>
+        <Text style={[styles.filterPillText, selected === 'All' && styles.filterPillTextActive]}>All</Text>
+      </Pressable>
+      {options.map((opt) => (
+        <Pressable key={opt} style={[styles.filterPill, selected === opt && styles.filterPillActive]} onPress={() => onSelect(opt)}>
+          <Text style={[styles.filterPillText, selected === opt && styles.filterPillTextActive]}>{opt}</Text>
+        </Pressable>
+      ))}
+    </View>
+  </View>
+));
+FilterPills.displayName = 'FilterPills';
+
 export default function HomeScreen() {
   const { userToken } = useAuth();
   const { colors, isDark } = useTheme();
-  const styles = createStyles(colors);
+  // useMemo so `styles` is a stable reference across renders (only
+  // recomputed when `colors` actually changes), instead of calling
+  // createStyles(colors) — and rebuilding every StyleSheet object — on
+  // every single render.
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
 
   const [ads, setAds] = useState<PublishedGemAd[]>([]);
@@ -219,21 +304,21 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, [fetchAds, fetchFavoriteIds]);
 
-  const loadMoreAds = () => {
+  const loadMoreAds = useCallback(() => {
     if (!loadingMore && hasMore) {
       fetchAds(page + 1, prefCurrency, exchangeRate);
     }
-  };
+  }, [loadingMore, hasMore, fetchAds, page, prefCurrency, exchangeRate]);
 
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     setFilterModalVisible(false);
     fetchAds(1, prefCurrency, exchangeRate);
-  };
+  }, [fetchAds, prefCurrency, exchangeRate]);
 
   // Resets both the filter form fields AND immediately re-fetches the home
   // screen results using explicit overrides (so it doesn't rely on stale
   // state from before the reset).
-  const resetFilters = () => {
+  const resetFilters = useCallback(() => {
     setMinPrice('');
     setMaxPrice('');
     setMinCarat('');
@@ -254,29 +339,38 @@ export default function HomeScreen() {
       origin: 'All',
       clarity: 'All',
     });
-  };
+  }, [fetchAds, prefCurrency, exchangeRate]);
 
-  const toggleFavorite = async (adId: string) => {
-    if (!userToken) {
-      Alert.alert('Login Required', 'Please log in to save favorites.');
-      return;
-    }
+  const toggleFavorite = useCallback(
+    async (adId: string) => {
+      if (!userToken) {
+        Alert.alert('Login Required', 'Please log in to save favorites.');
+        return;
+      }
 
-    const wasFavorited = favoriteIds.has(adId);
-    setFavoriteIds((prev) => {
-      const next = new Set(prev);
-      if (wasFavorited) next.delete(adId);
-      else next.add(adId);
-      return next;
-    });
-
-    try {
-      const res = await fetch(`${FAVORITES_URL}/toggle/${adId}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${userToken}` },
+      const wasFavorited = favoriteIds.has(adId);
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (wasFavorited) next.delete(adId);
+        else next.add(adId);
+        return next;
       });
-      const data = await res.json();
-      if (!data.success) {
+
+      try {
+        const res = await fetch(`${FAVORITES_URL}/toggle/${adId}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${userToken}` },
+        });
+        const data = await res.json();
+        if (!data.success) {
+          setFavoriteIds((prev) => {
+            const next = new Set(prev);
+            if (wasFavorited) next.add(adId);
+            else next.delete(adId);
+            return next;
+          });
+        }
+      } catch {
         setFavoriteIds((prev) => {
           const next = new Set(prev);
           if (wasFavorited) next.add(adId);
@@ -284,76 +378,44 @@ export default function HomeScreen() {
           return next;
         });
       }
-    } catch {
-      setFavoriteIds((prev) => {
-        const next = new Set(prev);
-        if (wasFavorited) next.add(adId);
-        else next.delete(adId);
-        return next;
-      });
-    }
-  };
-
-  const renderCategoryItem = ({ item }: { item: string }) => (
-    <Pressable
-      style={[styles.categoryPill, selectedCategory === item && styles.categoryPillActive]}
-      onPress={() => setSelectedCategory(item)}
-    >
-      <Text style={[styles.categoryText, selectedCategory === item && styles.categoryTextActive]}>
-        {item}
-      </Text>
-    </Pressable>
+    },
+    [userToken, favoriteIds]
   );
 
-  const FilterPills = ({ title, options, selected, onSelect }: any) => (
-    <View style={styles.filterPillSection}>
-      <Text style={styles.filterSectionTitle}>{title}</Text>
-      <View style={styles.pillWrap}>
-        <Pressable style={[styles.filterPill, selected === 'All' && styles.filterPillActive]} onPress={() => onSelect('All')}>
-          <Text style={[styles.filterPillText, selected === 'All' && styles.filterPillTextActive]}>All</Text>
-        </Pressable>
-        {options.map((opt: string) => (
-          <Pressable key={opt} style={[styles.filterPill, selected === opt && styles.filterPillActive]} onPress={() => onSelect(opt)}>
-            <Text style={[styles.filterPillText, selected === opt && styles.filterPillTextActive]}>{opt}</Text>
-          </Pressable>
-        ))}
-      </View>
-    </View>
+  const goToGemDetails = useCallback(
+    (id: string) => router.push({ pathname: '/gem/gem-details', params: { id } }),
+    [router]
   );
 
-  const renderItem = ({ item }: { item: PublishedGemAd }) => {
-    const isFavorited = favoriteIds.has(item._id);
-    return (
+  const renderCategoryItem = useCallback(
+    ({ item }: { item: string }) => (
       <Pressable
-        style={styles.card}
-        onPress={() => router.push({ pathname: '/gem/gem-details', params: { id: item._id } })}
+        style={[styles.categoryPill, selectedCategory === item && styles.categoryPillActive]}
+        onPress={() => setSelectedCategory(item)}
       >
-        <View style={styles.imageWrapper}>
-          <Image source={{ uri: item.images[0]?.url }} style={styles.cardImage} />
-          <Pressable style={styles.heartButton} onPress={() => toggleFavorite(item._id)}>
-            <Ionicons
-              name={isFavorited ? 'heart' : 'heart-outline'}
-              size={18}
-              color={isFavorited ? colors.danger : colors.textSecondary}
-            />
-          </Pressable>
-        </View>
-        <View style={styles.cardBody}>
-          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.cardPrice}>{formatDisplayPrice(item.price, prefCurrency, exchangeRate)}</Text>
-          <View style={styles.cardMetaRow}>
-            <Text style={styles.cardMeta} numberOfLines={1}>{item.category}</Text>
-            <Text style={styles.cardMetaDot}>•</Text>
-            <Text style={styles.cardMeta}>{item.weightCarats}ct</Text>
-          </View>
-          <View style={styles.cardLocationRow}>
-            <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
-            <Text style={styles.cardLocation} numberOfLines={1}>{item.location.city}, {item.location.province}</Text>
-          </View>
-        </View>
+        <Text style={[styles.categoryText, selectedCategory === item && styles.categoryTextActive]}>
+          {item}
+        </Text>
       </Pressable>
-    );
-  };
+    ),
+    [styles, selectedCategory]
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: PublishedGemAd }) => (
+      <GemCard
+        item={item}
+        isFavorited={favoriteIds.has(item._id)}
+        prefCurrency={prefCurrency}
+        exchangeRate={exchangeRate}
+        styles={styles}
+        colors={colors}
+        onPress={goToGemDetails}
+        onToggleFavorite={toggleFavorite}
+      />
+    ),
+    [favoriteIds, prefCurrency, exchangeRate, styles, colors, goToGemDetails, toggleFavorite]
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -409,6 +471,15 @@ export default function HomeScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           onEndReached={loadMoreAds}
           onEndReachedThreshold={0.5}
+          // Perf tuning for large result sets (hundreds–thousands of ads):
+          // render fewer rows up front, cap how many mount per scroll batch,
+          // keep a modest render "window" around the viewport, and unmount
+          // offscreen native views entirely instead of just hiding them.
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          removeClippedSubviews
+          updateCellsBatchingPeriod={50}
           ListFooterComponent={
             loadingMore ? (
               <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
@@ -451,10 +522,10 @@ export default function HomeScreen() {
               <TextInput style={styles.filterInput} placeholder="Max Carat" keyboardType="numeric" value={maxCarat} onChangeText={setMaxCarat} placeholderTextColor={colors.textSecondary}/>
             </View>
 
-            <FilterPills title="Color" options={GEM_COLORS} selected={selectedColor} onSelect={setSelectedColor} />
-            <FilterPills title="Shape & Cut" options={GEM_SHAPES} selected={selectedShape} onSelect={setSelectedShape} />
-            <FilterPills title="Origin" options={GEM_ORIGINS} selected={selectedOrigin} onSelect={setSelectedOrigin} />
-            <FilterPills title="Clarity" options={GEM_CLARITIES} selected={selectedClarity} onSelect={setSelectedClarity} />
+            <FilterPills title="Color" options={GEM_COLORS} selected={selectedColor} onSelect={setSelectedColor} styles={styles} />
+            <FilterPills title="Shape & Cut" options={GEM_SHAPES} selected={selectedShape} onSelect={setSelectedShape} styles={styles} />
+            <FilterPills title="Origin" options={GEM_ORIGINS} selected={selectedOrigin} onSelect={setSelectedOrigin} styles={styles} />
+            <FilterPills title="Clarity" options={GEM_CLARITIES} selected={selectedClarity} onSelect={setSelectedClarity} styles={styles} />
           </ScrollView>
 
           <View style={styles.modalFooter}>

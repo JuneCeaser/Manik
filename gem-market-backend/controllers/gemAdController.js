@@ -17,6 +17,12 @@ const getRequiredCredits = (amount, currency) => {
   return 6;
 };
 
+// Normalizes a { amount, currency } price into LKR using the server's
+// configured rate, so it can be stored on the document and queried/sorted
+// directly in MongoDB (see priceInLKR in the GemAd model).
+const toLKR = (amount, currency) =>
+  currency === 'USD' ? Number(amount) * USD_TO_LKR_RATE : Number(amount);
+
 exports.getImageKitAuth = (req, res) => {
   try {
     const authParams = imagekit.getAuthenticationParameters();
@@ -60,6 +66,7 @@ exports.createGemAd = async (req, res) => {
       title: title.trim(),
       category,
       price: { amount: Number(price.amount), currency: price.currency, negotiable: !!price.negotiable },
+      priceInLKR: toLKR(price.amount, price.currency),
       weightCarats: Number(weightCarats),
       color,
       shape,
@@ -83,7 +90,7 @@ exports.createGemAd = async (req, res) => {
       hidePhoneNumber: !!hidePhoneNumber,
       status: 'PENDING',
       creditsUsed: requiredCredits,
-      bumpedAt: Date.now(), 
+      bumpedAt: Date.now(),
     });
 
     user.adCredits -= requiredCredits;
@@ -115,26 +122,32 @@ exports.getGemAdById = async (req, res) => {
   }
 };
 
-// --- ADVANCED SEARCH & FILTER ADDED HERE ---
+// --- ADVANCED SEARCH & FILTER: fully DB-side now ---
+// Every filter (including price, across currencies) is expressed as a
+// Mongo query condition, and pagination uses .skip()/.limit() at the
+// database level instead of fetching all matches into memory first. This
+// is what keeps response times flat as the ad count grows into the
+// thousands, instead of degrading linearly with collection size.
 exports.getPublishedGemAds = async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20; 
+    const limit = parseInt(req.query.limit, 10) || 20;
     const skip = (page - 1) * limit;
 
     const category = req.query.category;
-    const minPrice = parseFloat(req.query.minPrice);
-    const maxPrice = parseFloat(req.query.maxPrice);
     const prefCurrency = req.query.currency || 'LKR';
-    const exchangeRate = parseFloat(req.query.rate) || 300;
+    const exchangeRate = parseFloat(req.query.rate) || USD_TO_LKR_RATE;
 
-    let query = { status: 'APPROVED' };
+    const query = { status: 'APPROVED' };
 
     // 1. Text Search (Matches Title or Description)
+    // Kept as $regex to preserve partial/substring matching behavior.
+    // The { status: 1, bumpedAt: -1 } index still lets Mongo narrow to
+    // approved ads efficiently before scanning for the regex match.
     if (req.query.search) {
       query.$or = [
         { title: { $regex: req.query.search, $options: 'i' } },
-        { description: { $regex: req.query.search, $options: 'i' } }
+        { description: { $regex: req.query.search, $options: 'i' } },
       ];
     }
 
@@ -154,33 +167,37 @@ exports.getPublishedGemAds = async (req, res) => {
       if (!isNaN(maxCarat)) query.weightCarats.$lte = maxCarat;
     }
 
-    const gemAds = await GemAd.find(query)
-      .populate('user', 'name')
-      .sort({ bumpedAt: -1, createdAt: -1 });
-
-    let filteredAds = gemAds;
-
-    // 4. In-Memory Currency Price Filter (Handles USD vs LKR conversion)
+    // 4. Price Range Filter — now a normal indexed Mongo query.
+    // The user's min/max are in `prefCurrency`; convert them to LKR (the
+    // unit priceInLKR is stored in) using the same rate the client sent,
+    // so comparisons stay consistent with what's rendered on screen.
+    const minPrice = parseFloat(req.query.minPrice);
+    const maxPrice = parseFloat(req.query.maxPrice);
     if (!isNaN(minPrice) || !isNaN(maxPrice)) {
-      filteredAds = filteredAds.filter(ad => {
-        let adAmountInPref = ad.price.amount;
-        
-        if (ad.price.currency === 'LKR' && prefCurrency === 'USD') {
-          adAmountInPref = ad.price.amount / exchangeRate;
-        } else if (ad.price.currency === 'USD' && prefCurrency === 'LKR') {
-          adAmountInPref = ad.price.amount * exchangeRate;
-        }
-
-        if (!isNaN(minPrice) && adAmountInPref < minPrice) return false;
-        if (!isNaN(maxPrice) && adAmountInPref > maxPrice) return false;
-        return true;
-      });
+      query.priceInLKR = {};
+      if (!isNaN(minPrice)) {
+        query.priceInLKR.$gte = prefCurrency === 'USD' ? minPrice * exchangeRate : minPrice;
+      }
+      if (!isNaN(maxPrice)) {
+        query.priceInLKR.$lte = prefCurrency === 'USD' ? maxPrice * exchangeRate : maxPrice;
+      }
     }
 
-    const paginatedAds = filteredAds.slice(skip, skip + limit);
-    const hasMore = skip + paginatedAds.length < filteredAds.length;
+    // Run the page fetch and the total count in parallel — countDocuments
+    // uses the same indexed query so it stays cheap even as the
+    // collection grows.
+    const [gemAds, totalMatching] = await Promise.all([
+      GemAd.find(query)
+        .populate('user', 'name')
+        .sort({ bumpedAt: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      GemAd.countDocuments(query),
+    ]);
 
-    return res.json({ success: true, gemAds: paginatedAds, hasMore });
+    const hasMore = skip + gemAds.length < totalMatching;
+
+    return res.json({ success: true, gemAds, hasMore });
   } catch (err) {
     console.error('getPublishedGemAds error:', err);
     return res.status(500).json({ success: false, message: 'Could not fetch ads.' });
@@ -237,6 +254,8 @@ exports.updateGemAd = async (req, res) => {
     if (category) gemAd.category = category;
     if (price && price.amount) {
       gemAd.price = { amount: Number(price.amount), currency: price.currency, negotiable: !!price.negotiable };
+      // Keep the denormalized LKR value in sync whenever price changes.
+      gemAd.priceInLKR = toLKR(price.amount, price.currency);
     }
     if (weightCarats) gemAd.weightCarats = Number(weightCarats);
     if (color) gemAd.color = color;
@@ -280,7 +299,7 @@ exports.updateGemAd = async (req, res) => {
     }
 
     gemAd.status = 'PENDING';
-    gemAd.bumpedAt = Date.now(); 
+    gemAd.bumpedAt = Date.now();
     await gemAd.save();
 
     return res.json({ success: true, message: 'Ad updated and resubmitted.', gemAd });

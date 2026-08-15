@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -18,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter, useFocusEffect } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { API_BASE_URL } from '../../constants/api';
@@ -51,6 +51,13 @@ const PROVINCE_CITY_MAP: Record<string, string[]> = {
 };
 
 const PROVINCES = Object.keys(PROVINCE_CITY_MAP);
+
+// Small wrapper around react-native-toast-message so every call site stays
+// short and consistent. type controls the toast's color/icon preset
+// ('success' | 'error' | 'info'); text2 is the optional secondary line.
+const showToast = (type: 'success' | 'error' | 'info', text1: string, text2?: string) => {
+  Toast.show({ type, text1, text2, position: 'top', visibilityTime: 3000 });
+};
 
 export default function ProfileScreen() {
   // Added updatePreferredCurrency from context
@@ -124,13 +131,13 @@ export default function ProfileScreen() {
       const data = await res.json();
 
       if (res.status === 401 || !data.success) {
-        Alert.alert('Session Expired', 'Your account has been deleted or is no longer valid.');
+        showToast('error', 'Session Expired', 'Your account has been deleted or is no longer valid.');
         logout();
         return;
       }
       if (data.user) await loginState(userToken, data.user);
     } catch {
-      Alert.alert('Error', 'Failed to refresh profile data.');
+      showToast('error', 'Error', 'Failed to refresh profile data.');
     } finally {
       setRefreshing(false);
     }
@@ -138,7 +145,7 @@ export default function ProfileScreen() {
 
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) return Alert.alert('Permission Required', 'You need to allow access to your photos.');
+    if (permissionResult.granted === false) return showToast('info', 'Permission Required', 'You need to allow access to your photos.');
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.5, base64: true,
@@ -157,17 +164,19 @@ export default function ProfileScreen() {
       });
       const data = await res.json();
       if (res.status === 401) { logout(); return; }
-      if (data.success) await loginState(userToken!, data.user);
-      else Alert.alert('Upload Failed', data.message);
+      if (data.success) {
+        await loginState(userToken!, data.user);
+        showToast('success', 'Profile Photo Updated');
+      } else showToast('error', 'Upload Failed', data.message);
     } catch {
-      Alert.alert('Error', 'Failed to connect to the server.');
+      showToast('error', 'Error', 'Failed to connect to the server.');
     } finally {
       setImageUploading(false);
     }
   };
 
   const handleChangeName = async () => {
-    if (!newName.trim()) return Alert.alert('Required', 'Please enter a new name.');
+    if (!newName.trim()) return showToast('error', 'Required', 'Please enter a new name.');
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/change-name`, {
@@ -178,16 +187,16 @@ export default function ProfileScreen() {
       const data = await res.json();
       if (res.status === 401) { logout(); return; }
       if (data.success) {
-        await loginState(userToken!, data.user); 
-        Alert.alert('Success', 'Name updated successfully.');
+        await loginState(userToken!, data.user);
+        showToast('success', 'Success', 'Name updated successfully.');
         setActiveModal('SETTINGS');
-      } else Alert.alert('Error', data.message);
-    } catch { Alert.alert('Error', 'Failed to update name.'); } finally { setLoading(false); }
+      } else showToast('error', 'Error', data.message);
+    } catch { showToast('error', 'Error', 'Failed to update name.'); } finally { setLoading(false); }
   };
 
   const handleUpdateWhatsapp = async () => {
     const cleanNumber = whatsappNumberInput.replace(/\D/g, '');
-    if (!cleanNumber || cleanNumber.length < 6) return Alert.alert('Required', 'Please enter a valid WhatsApp number.');
+    if (!cleanNumber || cleanNumber.length < 6) return showToast('error', 'Required', 'Please enter a valid WhatsApp number.');
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/whatsapp-number`, {
@@ -199,14 +208,14 @@ export default function ProfileScreen() {
       if (res.status === 401) { logout(); return; }
       if (data.success) {
         await loginState(userToken!, data.user);
-        Alert.alert('Success', 'WhatsApp number saved.');
+        showToast('success', 'Success', 'WhatsApp number saved.');
         closeModal();
-      } else Alert.alert('Error', data.message);
-    } catch { Alert.alert('Error', 'Failed to save WhatsApp number.'); } finally { setLoading(false); }
+      } else showToast('error', 'Error', data.message);
+    } catch { showToast('error', 'Error', 'Failed to save WhatsApp number.'); } finally { setLoading(false); }
   };
 
   const handleUpdateLocation = async () => {
-    if (!selectedProvince || !selectedCity) return Alert.alert('Required', 'Please select both province and city.');
+    if (!selectedProvince || !selectedCity) return showToast('error', 'Required', 'Please select both province and city.');
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/location`, {
@@ -218,14 +227,14 @@ export default function ProfileScreen() {
       if (res.status === 401) { logout(); return; }
       if (data.success) {
         await loginState(userToken!, data.user);
-        Alert.alert('Success', 'Location saved.');
+        showToast('success', 'Success', 'Location saved.');
         closeModal();
-      } else Alert.alert('Error', data.message);
-    } catch { Alert.alert('Error', 'Failed to save location.'); } finally { setLoading(false); }
+      } else showToast('error', 'Error', data.message);
+    } catch { showToast('error', 'Error', 'Failed to save location.'); } finally { setLoading(false); }
   };
 
   const handleSendPasswordOtp = async () => {
-    if (!newPassword || newPassword.length < 6) return Alert.alert('Error', 'New password must be at least 6 characters.');
+    if (!newPassword || newPassword.length < 6) return showToast('error', 'Error', 'New password must be at least 6 characters.');
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/change-password/send-otp`, {
@@ -235,12 +244,12 @@ export default function ProfileScreen() {
       const data = await res.json();
       if (res.status === 401) { logout(); return; }
       if (data.success) setStep('OTP');
-      else Alert.alert('Error', data.message);
-    } catch { Alert.alert('Error', 'Failed to send OTP.'); } finally { setLoading(false); }
+      else showToast('error', 'Error', data.message);
+    } catch { showToast('error', 'Error', 'Failed to send OTP.'); } finally { setLoading(false); }
   };
 
   const handleVerifyPasswordOtp = async () => {
-    if (otpCode.length !== 6) return Alert.alert('Required', 'Enter 6-digit OTP.');
+    if (otpCode.length !== 6) return showToast('error', 'Required', 'Enter 6-digit OTP.');
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/change-password/verify-otp`, {
@@ -251,10 +260,10 @@ export default function ProfileScreen() {
       const data = await res.json();
       if (res.status === 401) { logout(); return; }
       if (data.success) {
-        Alert.alert('Success', 'Password updated.');
+        showToast('success', 'Success', 'Password updated.');
         setActiveModal('SETTINGS');
-      } else Alert.alert('Error', data.message);
-    } catch { Alert.alert('Error', 'Failed to update password.'); } finally { setLoading(false); }
+      } else showToast('error', 'Error', data.message);
+    } catch { showToast('error', 'Error', 'Failed to update password.'); } finally { setLoading(false); }
   };
 
   const handleSendDeleteOtp = async () => {
@@ -267,12 +276,12 @@ export default function ProfileScreen() {
       const data = await res.json();
       if (res.status === 401) { logout(); return; }
       if (data.success) setStep('OTP');
-      else Alert.alert('Error', data.message);
-    } catch { Alert.alert('Error', 'Failed to request deletion.'); } finally { setLoading(false); }
+      else showToast('error', 'Error', data.message);
+    } catch { showToast('error', 'Error', 'Failed to request deletion.'); } finally { setLoading(false); }
   };
 
   const handleVerifyDeleteOtp = async () => {
-    if (otpCode.length !== 6) return Alert.alert('Required', 'Enter 6-digit OTP.');
+    if (otpCode.length !== 6) return showToast('error', 'Required', 'Enter 6-digit OTP.');
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/delete-account/verify-otp`, {
@@ -282,16 +291,17 @@ export default function ProfileScreen() {
       });
       const data = await res.json();
       if (data.success) {
-        Alert.alert('Account Deleted', 'Your account has been deleted.');
+        showToast('success', 'Account Deleted', 'Your account has been deleted.');
         closeModal();
         logout();
-      } else Alert.alert('Error', data.message);
-    } catch { Alert.alert('Error', 'Failed to delete account.'); } finally { setLoading(false); }
+      } else showToast('error', 'Error', data.message);
+    } catch { showToast('error', 'Error', 'Failed to delete account.'); } finally { setLoading(false); }
   };
 
   const goBackOrClose = activeModal === 'SETTINGS' ? closeModal : () => setActiveModal('SETTINGS');
 
   return (
+    <>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
@@ -756,6 +766,11 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
     </ScrollView>
+    {/* Fallback mount point. Prefer moving <Toast /> to your root layout
+        (see notes) so toasts still render after this screen unmounts —
+        e.g. right before logout() navigates away. */}
+    <Toast />
+    </>
   );
 }
 
