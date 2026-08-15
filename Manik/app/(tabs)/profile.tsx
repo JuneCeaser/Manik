@@ -21,7 +21,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { API_BASE_URL } from '../../constants/api';
-import { getPreferredCurrency, setPreferredCurrency } from '../../utils/currency';
+import { getPreferredCurrency } from '../../utils/currency';
 
 type ActiveModal = 'NONE' | 'SETTINGS' | 'CHANGE_NAME' | 'CHANGE_PASSWORD' | 'DELETE_ACCOUNT' | 'ADD_WHATSAPP' | 'ADD_LOCATION';
 
@@ -53,7 +53,8 @@ const PROVINCE_CITY_MAP: Record<string, string[]> = {
 const PROVINCES = Object.keys(PROVINCE_CITY_MAP);
 
 export default function ProfileScreen() {
-  const { user, userToken, logout, loginState } = useAuth();
+  // Added updatePreferredCurrency from context
+  const { user, userToken, logout, loginState, updatePreferredCurrency } = useAuth();
   const { colors, theme, setTheme } = useTheme();
   const styles = createStyles(colors);
   const router = useRouter();
@@ -86,7 +87,7 @@ export default function ProfileScreen() {
 
   const handleCurrencyChange = async (curr: 'LKR' | 'USD') => {
     setCurrencyPref(curr);
-    await setPreferredCurrency(curr);
+    await updatePreferredCurrency(curr); // This now updates global context properly
   };
 
   const closeModal = () => {
@@ -288,8 +289,6 @@ export default function ProfileScreen() {
     } catch { Alert.alert('Error', 'Failed to delete account.'); } finally { setLoading(false); }
   };
 
-  // Purely presentational — reused so the sheet's back arrow, its header
-  // close button and the backdrop tap all agree on where "back" goes.
   const goBackOrClose = activeModal === 'SETTINGS' ? closeModal : () => setActiveModal('SETTINGS');
 
   return (
@@ -312,7 +311,6 @@ export default function ProfileScreen() {
 
       {user && (
         <>
-          {/* Hero */}
           <View style={styles.heroCard}>
             <View style={styles.heroBackdrop} />
             <Pressable onPress={pickImage} disabled={imageUploading} style={styles.avatarWrapper}>
@@ -335,7 +333,6 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* Wallet / credits */}
           <Pressable
             style={({ pressed }) => [styles.walletCard, pressed && styles.rowPressed]}
             onPress={() => router.push('/buy-credits')}
@@ -352,7 +349,6 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.primary} />
           </Pressable>
 
-          {/* Preferences */}
           <View style={styles.sectionCard}>
             <Text style={styles.sectionLabel}>Preferences</Text>
 
@@ -372,7 +368,6 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* Account */}
           <View style={styles.sectionCard}>
             <Text style={styles.sectionLabel}>Account</Text>
 
@@ -428,7 +423,6 @@ export default function ProfileScreen() {
         </>
       )}
 
-      {/* MAIN BOTTOM SHEET */}
       <Modal visible={activeModal !== 'NONE'} animationType="slide" transparent onRequestClose={goBackOrClose}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <Pressable style={styles.sheetOverlay} onPress={goBackOrClose}>
@@ -448,7 +442,6 @@ export default function ProfileScreen() {
                 </Pressable>
               </View>
 
-              {/* SETTINGS MENU */}
               {activeModal === 'SETTINGS' && (
                 <View>
                   <View style={styles.prefRow}>
@@ -523,7 +516,7 @@ export default function ProfileScreen() {
                 <View>
                   <View style={styles.infoBanner}>
                     <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8, marginTop: 1 }} />
-                    <Text style={styles.infoBannerText}>This number isn&apos;t verified — it&apos;s just how buyers and sellers reach you on WhatsApp.</Text>
+                    <Text style={styles.infoBannerText}>This number isn t verified — it s just how buyers and sellers reach you on WhatsApp.</Text>
                   </View>
                   <Text style={styles.fieldLabel}>WhatsApp Number</Text>
                   <View style={styles.phoneRow}>
@@ -668,7 +661,6 @@ export default function ProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* COUNTRY CODE PICKER */}
       <Modal visible={countryPickerVisible} animationType="slide" transparent onRequestClose={() => setCountryPickerVisible(false)}>
         <Pressable style={styles.sheetOverlay} onPress={() => setCountryPickerVisible(false)}>
           <Pressable style={styles.sheetCard} onPress={() => {}}>
@@ -702,7 +694,6 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
 
-      {/* PROVINCE PICKER */}
       <Modal visible={provincePickerVisible} animationType="slide" transparent onRequestClose={() => setProvincePickerVisible(false)}>
         <Pressable style={styles.sheetOverlay} onPress={() => setProvincePickerVisible(false)}>
           <Pressable style={styles.sheetCard} onPress={() => {}}>
@@ -734,7 +725,6 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
 
-      {/* CITY PICKER */}
       <Modal visible={cityPickerVisible} animationType="slide" transparent onRequestClose={() => setCityPickerVisible(false)}>
         <Pressable style={styles.sheetOverlay} onPress={() => setCityPickerVisible(false)}>
           <Pressable style={styles.sheetCard} onPress={() => {}}>
@@ -788,7 +778,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   loadingState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
   loadingStateText: { marginTop: 12, fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
 
-  // Hero card
   heroCard: {
     backgroundColor: colors.card, borderRadius: 28, paddingTop: 40, paddingBottom: 26, paddingHorizontal: 20,
     alignItems: 'center', marginBottom: 16, overflow: 'hidden', position: 'relative', ...cardShadow,
@@ -808,7 +797,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   phonePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.inputBg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
   userPhone: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginLeft: 5 },
 
-  // Wallet card
   walletCard: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: 20, padding: 16,
     marginBottom: 16, overflow: 'hidden', position: 'relative', ...cardShadow,
@@ -820,7 +808,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   walletSub: { fontSize: 12.5, color: colors.textSecondary },
   walletValue: { fontSize: 20, fontWeight: '800', color: colors.primary, marginRight: 6 },
 
-  // Section cards
   sectionCard: { backgroundColor: colors.card, borderRadius: 20, padding: 18, marginBottom: 16, ...cardShadow },
   sectionLabel: { fontSize: 12.5, fontWeight: '800', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 14 },
 
@@ -834,7 +821,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   segmentText: { fontSize: 12.5, fontWeight: '700', color: colors.textSecondary },
   segmentTextActive: { color: '#FFFFFF' },
 
-  // List rows
   listRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: colors.border },
   listRowLast: { borderBottomWidth: 0, paddingBottom: 0 },
   rowPressed: { opacity: 0.6 },
@@ -843,7 +829,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   rowTitle: { fontSize: 14.5, fontWeight: '700', color: colors.text },
   rowSubtitle: { fontSize: 12.5, color: colors.textSecondary, marginTop: 2 },
 
-  // Bottom sheets
   sheetOverlay: { flex: 1, backgroundColor: colors.modalOverlay, justifyContent: 'flex-end' },
   sheetCard: {
     backgroundColor: colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28,
@@ -864,7 +849,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   logoutText: { color: colors.textSecondary, fontWeight: '800', fontSize: 15, marginLeft: 8 },
 
-  // Form fields
   fieldLabel: { fontSize: 11.5, fontWeight: '800', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 },
   inputWrap: {
     flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.inputBg,
@@ -904,7 +888,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   dropdownSelectedText: { fontSize: 15.5, fontWeight: '700', color: colors.text },
   dropdownPlaceholderText: { fontSize: 15.5, fontWeight: '500', color: colors.textSecondary },
 
-  // Pickers
   pickerList: { marginTop: 4, maxHeight: 400 },
   pickerRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
   countryFlag: { fontSize: 20, marginRight: 10 },

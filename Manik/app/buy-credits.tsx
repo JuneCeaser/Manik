@@ -12,11 +12,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useRouter, useFocusEffect } from 'expo-router';
 import Purchases, { PurchasesPackage } from 'react-native-purchases';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { API_BASE_URL } from '../constants/api';
+import { getPreferredCurrency, fetchLiveExchangeRate } from '../utils/currency';
 
 type PaymentHistory = {
   _id: string;
@@ -31,6 +32,10 @@ export default function BuyCreditsScreen() {
   const styles = createStyles(colors);
   const router = useRouter();
 
+  // Explicitly fetch and track currency just for this screen to prevent caching bugs
+  const [localCurrency, setLocalCurrency] = useState<'LKR' | 'USD'>('LKR');
+  const [localRate, setLocalRate] = useState(300);
+
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [slipImage, setSlipImage] = useState<string | null>(null);
@@ -43,6 +48,40 @@ export default function BuyCreditsScreen() {
   // History states
   const [myPayments, setMyPayments] = useState<PaymentHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
+
+  // Fetch local storage exactly on screen focus to instantly respect the user's changes
+  useFocusEffect(
+    useCallback(() => {
+      const loadPreferences = async () => {
+        const currency = await getPreferredCurrency();
+        const rate = await fetchLiveExchangeRate();
+        setLocalCurrency(currency);
+        setLocalRate(rate);
+      };
+      loadPreferences();
+    }, [])
+  );
+
+  // Helper to dynamically format the price based on global user preference
+  const getFormattedPrice = (amount: number) => {
+    // Infer the original currency (Store USD amounts will be small, LKR will be > 100)
+    const isOriginalUSD = amount < 100;
+    
+    let convertedAmount = amount;
+    
+    // Cross-convert depending on the user's preference using our locally fetched rate
+    if (isOriginalUSD && localCurrency === 'LKR') {
+      convertedAmount = amount * localRate;
+    } else if (!isOriginalUSD && localCurrency === 'USD') {
+      convertedAmount = amount / localRate;
+    }
+
+    if (localCurrency === 'USD') {
+      return `$${convertedAmount.toFixed(2)}`;
+    } else {
+      return `Rs. ${Math.round(convertedAmount).toLocaleString()}`;
+    }
+  };
 
   const fetchHistory = async () => {
     if (!userToken) return;
@@ -61,7 +100,6 @@ export default function BuyCreditsScreen() {
     }
   };
 
-  // Fetch RevenueCat Offerings
   const fetchOfferings = async () => {
     try {
       const offerings = await Purchases.getOfferings();
@@ -91,40 +129,46 @@ export default function BuyCreditsScreen() {
   }
 
   // Handle RevenueCat Test Store Purchase
- const handleRevenueCatPurchase = async (pkg: PurchasesPackage) => {
-  setLoading(true);
-  try {
-    const { customerInfo } = await Purchases.purchasePackage(pkg);
+  const handleRevenueCatPurchase = async (pkg: PurchasesPackage) => {
+    setLoading(true);
+    try {
+      const { customerInfo } = await Purchases.purchasePackage(pkg);
 
-    // Purchase succeeded on RevenueCat's side — now tell our backend to grant credits
-    const res = await fetch(`${API_BASE_URL.replace('/auth', '')}/payments/revenuecat-confirm`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${userToken}`,
-      },
-      body: JSON.stringify({
-        amount: pkg.product.price,
-        productId: pkg.product.identifier,
-      }),
-    });
-    const data = await res.json();
+      // Determine if the store charged in USD. If it did, we convert it to LKR for the backend 
+      // so that the backend SMS/Notification history (which hardcodes "Rs.") stays factually accurate.
+      const isUSD = pkg.product.price < 100;
+      const normalizedAmountLKR = isUSD 
+        ? Math.round(pkg.product.price * localRate) 
+        : pkg.product.price;
 
-    if (data.success) {
-      Alert.alert('Purchase Successful!', 'Your 30 Ad Credits have been added.');
-      setPaymentMethod('NONE');
-      fetchHistory();
-    } else {
-      Alert.alert('Purchase Error', data.message || 'Purchase completed but credits could not be added. Please contact support.');
+      const res = await fetch(`${API_BASE_URL.replace('/auth', '')}/payments/revenuecat-confirm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${userToken}`,
+        },
+        body: JSON.stringify({
+          amount: normalizedAmountLKR, // Safely formatted to LKR
+          productId: pkg.product.identifier,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        Alert.alert('Purchase Successful!', 'Your 30 Ad Credits have been added.');
+        setPaymentMethod('NONE');
+        fetchHistory();
+      } else {
+        Alert.alert('Purchase Error', data.message || 'Purchase completed but credits could not be added. Please contact support.');
+      }
+    } catch (error: any) {
+      if (!error.userCancelled) {
+        Alert.alert('Purchase Error', error.message);
+      }
+    } finally {
+      setLoading(false);
     }
-  } catch (error: any) {
-    if (!error.userCancelled) {
-      Alert.alert('Purchase Error', error.message);
-    }
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -208,7 +252,7 @@ export default function BuyCreditsScreen() {
           <Text style={styles.topBackText}>Back to Profile</Text>
         </Pressable>
         <Text style={styles.title}>Unlock Pro Selling</Text>
-        <Text style={styles.subtitle}>Get 30 Ad Credits for just Rs. 990</Text>
+        <Text style={styles.subtitle}>Get 30 Ad Credits for just {getFormattedPrice(990)}</Text>
       </View>
 
       {/* Main Options */}
@@ -257,7 +301,7 @@ export default function BuyCreditsScreen() {
                   <ActivityIndicator color="#FFF" />
                 ) : (
                   <Text style={styles.submitButtonText}>
-                    Buy {pkg.product.title} ({pkg.product.priceString})
+                    Buy {pkg.product.title} ({getFormattedPrice(pkg.product.price)})
                   </Text>
                 )}
               </Pressable>
@@ -283,7 +327,7 @@ export default function BuyCreditsScreen() {
           </View>
 
           <Text style={styles.instructionText}>
-            Transfer Rs. 990 to the account above and upload the receipt screenshot below.
+            Transfer {getFormattedPrice(990)} to the account above and upload the receipt screenshot below.
           </Text>
 
           <Pressable style={styles.uploadBox} onPress={pickImage} disabled={loading}>
@@ -322,7 +366,7 @@ export default function BuyCreditsScreen() {
             myPayments.map((payment) => (
               <View key={payment._id} style={styles.historyCard}>
                 <View>
-                  <Text style={styles.historyAmount}>30 Ad Credits (Rs. {payment.amount})</Text>
+                  <Text style={styles.historyAmount}>30 Ad Credits ({getFormattedPrice(payment.amount)})</Text>
                   <Text style={styles.historyDate}>{new Date(payment.createdAt).toLocaleDateString()}</Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: getStatusColor(payment.status) }]}>
