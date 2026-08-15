@@ -83,7 +83,7 @@ export default function BuyCreditsScreen() {
     }
   };
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     if (!userToken) return;
     try {
       const res = await fetch(`${API_BASE_URL.replace('/auth', '')}/payments/my-payments`, {
@@ -98,9 +98,9 @@ export default function BuyCreditsScreen() {
     } finally {
       setLoadingHistory(false);
     }
-  };
+  }, [userToken]);
 
-  const fetchOfferings = async () => {
+  const fetchOfferings = useCallback(async () => {
     try {
       const offerings = await Purchases.getOfferings();
       if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
@@ -111,18 +111,18 @@ export default function BuyCreditsScreen() {
     } finally {
       setLoadingOfferings(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchHistory();
     fetchOfferings();
-  }, [userToken]);
+  }, [fetchHistory, fetchOfferings]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([fetchHistory(), fetchOfferings()]);
     setRefreshing(false);
-  }, [userToken]);
+  }, [fetchHistory, fetchOfferings]);
 
   if (!userToken) {
     return <Redirect href="/login" />;
@@ -132,35 +132,21 @@ export default function BuyCreditsScreen() {
   const handleRevenueCatPurchase = async (pkg: PurchasesPackage) => {
     setLoading(true);
     try {
-      const { customerInfo } = await Purchases.purchasePackage(pkg);
+      await Purchases.purchasePackage(pkg);
 
-      // Determine if the store charged in USD. If it did, we convert it to LKR for the backend 
-      // so that the backend SMS/Notification history (which hardcodes "Rs.") stays factually accurate.
-      const isUSD = pkg.product.price < 100;
-      const normalizedAmountLKR = isUSD 
-        ? Math.round(pkg.product.price * localRate) 
-        : pkg.product.price;
-
-      const res = await fetch(`${API_BASE_URL.replace('/auth', '')}/payments/revenuecat-confirm`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${userToken}`,
-        },
-        body: JSON.stringify({
-          amount: normalizedAmountLKR, // Safely formatted to LKR
-          productId: pkg.product.identifier,
-        }),
-      });
-      const data = await res.json();
-
-      if (data.success) {
-        Alert.alert('Purchase Successful!', 'Your 30 Ad Credits have been added.');
-        setPaymentMethod('NONE');
+      // We no longer call our backend manually here. The webhook will handle it.
+      Alert.alert(
+        'Purchase Processing!', 
+        'Your transaction is verifying. Your 30 Ad Credits will appear in your account momentarily.'
+      );
+      
+      setPaymentMethod('NONE');
+      
+      // Refresh the history after a 3 second delay to give the webhook time to hit our server
+      setTimeout(() => {
         fetchHistory();
-      } else {
-        Alert.alert('Purchase Error', data.message || 'Purchase completed but credits could not be added. Please contact support.');
-      }
+      }, 3000);
+
     } catch (error: any) {
       if (!error.userCancelled) {
         Alert.alert('Purchase Error', error.message);
@@ -404,7 +390,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   submitButton: { backgroundColor: '#10B981', padding: 16, borderRadius: 12, alignItems: 'center', marginVertical: 6 },
   submitButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
-  
   historyContainer: { marginTop: 30 },
   historyTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 16 },
   emptyText: { color: colors.textSecondary, fontStyle: 'italic', marginTop: 10 },

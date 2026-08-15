@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Purchases from 'react-native-purchases';
 
 type AuthContextType = {
   user: any;
@@ -22,11 +23,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Global Currency State
   const [preferredCurrency, setPreferredCurrency] = useState<'LKR' | 'USD'>('LKR');
   const [exchangeRate, setExchangeRate] = useState<number>(334.43); 
 
-  // Fetch Live Rate on App Start
   const fetchLiveExchangeRate = async () => {
     try {
       const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
@@ -42,8 +41,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const bootstrap = async () => {
     try {
       setIsLoading(true);
-
-      // Fetch the exchange rate in the background
       fetchLiveExchangeRate();
 
       const [token, userData, onboarded, storedCurrency] = await Promise.all([
@@ -54,22 +51,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       ]);
 
       if (token && userData) {
+        const parsedUser = JSON.parse(userData);
         setUserToken(token);
-        setUser(JSON.parse(userData));
+        setUser(parsedUser);
+        
+        // Ensure RevenueCat stays synced with the active session on app boot
+        await Purchases.logIn(parsedUser.id);
       }
 
       if (onboarded === 'true') {
         setHasOnboarded(true);
       }
 
-      // Load user's saved currency preference
       if (storedCurrency === 'LKR' || storedCurrency === 'USD') {
         setPreferredCurrency(storedCurrency);
       }
     } catch (e) {
       console.log('Error reading auth state', e);
     } finally {
-      // Always stop loading after checking, whether a token exists or not
       setIsLoading(false);
     }
   };
@@ -83,6 +82,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(userData);
     await AsyncStorage.setItem('userToken', token);
     await AsyncStorage.setItem('userInfo', JSON.stringify(userData));
+    
+    // Bind the MongoDB User ID to RevenueCat
+    await Purchases.logIn(userData.id);
   };
 
   const logout = async () => {
@@ -90,6 +92,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
     await AsyncStorage.removeItem('userToken');
     await AsyncStorage.removeItem('userInfo');
+    
+    // Log out of RevenueCat
+    await Purchases.logOut();
   };
 
   const completeOnboarding = async () => {

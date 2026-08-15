@@ -1,9 +1,17 @@
-// paymentRoutes.js
 const express = require('express');
 const router = express.Router();
-const { submitManualSlip, getMyPayments, confirmRevenueCatPurchase } = require('../controllers/paymentController');
 const protect = require('../middleware/authMiddleware');
+const { 
+  submitManualSlip, 
+  getMyPayments, 
+  handleRevenueCatWebhook 
+} = require('../controllers/paymentController');
+
+// Secure Webhook Endpoint (No JWT Auth, uses RevenueCat Authorization Header)
+router.post('/revenuecat-webhook', handleRevenueCatWebhook);
+
+// Protected User Endpoints
 router.post('/manual-slip', protect, submitManualSlip);
 router.get('/my-payments', protect, getMyPayments);
-router.post('/revenuecat-confirm', protect, confirmRevenueCatPurchase);
+
 module.exports = router;

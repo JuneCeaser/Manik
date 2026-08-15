@@ -1,5 +1,3 @@
-// paymentController.js
-
 const Payment = require('../models/Payment');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
@@ -12,9 +10,6 @@ const imagekit = new ImageKit({
   urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
 });
 
-// Helper to format old numbers (e.g., 077...) to international for Text.lk
-// without breaking new numbers that already have country codes.
-// (Same helper used in adminController.js)
 const formatForSms = (phone) => {
   let clean = phone.replace(/\D/g, '');
   if (phone.startsWith('0')) {
@@ -23,9 +18,6 @@ const formatForSms = (phone) => {
   return clean;
 };
 
-// @desc    Submit a manual bank slip for 30 Ad Credits
-// @route   POST /api/payments/manual-slip
-// @access  Private (User)
 exports.submitManualSlip = async (req, res) => {
   try {
     const { base64Image, amount } = req.body;
@@ -61,9 +53,6 @@ exports.submitManualSlip = async (req, res) => {
   }
 };
 
-// @desc    Get logged in user's payment history
-// @route   GET /api/payments/my-payments
-// @access  Private (User)
 exports.getMyPayments = async (req, res) => {
   try {
     const payments = await Payment.find({ user: req.user._id }).sort({ createdAt: -1 });
@@ -74,58 +63,80 @@ exports.getMyPayments = async (req, res) => {
   }
 };
 
-// @desc    Confirm a RevenueCat purchase and instantly grant 30 Ad Credits
-// @route   POST /api/payments/revenuecat-confirm
-// @access  Private (User)
-exports.confirmRevenueCatPurchase = async (req, res) => {
+// --- NEW SECURE WEBHOOK HANDLER ---
+exports.handleRevenueCatWebhook = async (req, res) => {
   try {
-    const { amount, productId } = req.body;
+    // 1. Verify the request is actually from RevenueCat
+    const expectedToken = process.env.REVENUECAT_WEBHOOK_SECRET;
+    const authHeader = req.headers.authorization;
 
-    const payment = await Payment.create({
-      user: req.user._id,
-      amount: amount || 990,
-      method: 'REVENUECAT',
-      status: 'APPROVED',
-      adCreditsAdded: 30,
-    });
+    if (authHeader !== `Bearer ${expectedToken}`) {
+      console.warn('Unauthorized webhook attempt');
+      return res.status(401).send('Unauthorized');
+    }
 
-    const user = await User.findById(req.user._id);
-    if (user) {
-      user.adCredits += 30;
-      await user.save();
+    // 2. Extract the event payload
+    const event = req.body.event;
 
-      // Create in-app notification — same pattern as admin's manual approval
-      try {
-        await Notification.create({
-          user: user._id,
-          title: 'Payment Approved',
-          message: `Your payment of Rs. ${payment.amount} has been approved. ${payment.adCreditsAdded} Ad Credits have been added to your account.`,
-          type: 'PAYMENT_APPROVED',
-          relatedPaymentId: payment._id,
-        });
-      } catch (notifError) {
-        console.error('Failed to create notification:', notifError);
-      }
+    // 3. Process only valid purchases
+    if (event.type === 'INITIAL_PURCHASE' || event.type === 'NON_RENEWING_PURCHASE') {
+      
+      // app_user_id is the MongoDB User ID provided by the frontend Purchases.logIn()
+      const userId = event.app_user_id; 
+      const purchasePrice = event.price || 990;
 
-      // Send SMS — same pattern as admin's manual approval
-      try {
-        const smsPhone = formatForSms(user.phone);
-        await sendSms(
-          smsPhone,
-          `Your Manik payment of Rs. ${payment.amount} has been approved. ${payment.adCreditsAdded} Ad Credits have been added to your account.`
-        );
-      } catch (smsError) {
-        console.error('Failed to send SMS notification:', smsError);
+      const user = await User.findById(userId);
+      
+      if (user) {
+        // Prevent duplicate processing by checking if this exact transaction was already logged
+        const existingPayment = await Payment.findOne({ payhereTransactionId: event.transaction_id });
+        
+        if (!existingPayment) {
+          // Grant credits
+          user.adCredits += 30;
+          await user.save();
+
+          // Log the payment in the history
+          const payment = await Payment.create({
+            user: user._id,
+            amount: purchasePrice,
+            method: 'REVENUECAT',
+            status: 'APPROVED',
+            adCreditsAdded: 30,
+            payhereTransactionId: event.transaction_id, // Store transaction ID to prevent duplicates
+          });
+
+          // Send In-App Notification
+          try {
+            await Notification.create({
+              user: user._id,
+              title: 'Payment Approved',
+              message: `Your Google Play purchase was successful. 30 Ad Credits have been added to your account.`,
+              type: 'PAYMENT_APPROVED',
+              relatedPaymentId: payment._id,
+            });
+          } catch (notifError) {
+            console.error('Failed to create notification:', notifError);
+          }
+
+          // Send SMS
+          try {
+            const smsPhone = formatForSms(user.phone);
+            await sendSms(
+              smsPhone,
+              `Manik Gem Market: Your purchase was successful! 30 Ad Credits have been added to your account.`
+            );
+          } catch (smsError) {
+            console.error('Failed to send SMS notification:', smsError);
+          }
+        }
       }
     }
 
-    return res.json({
-      success: true,
-      message: '30 Ad Credits added successfully.',
-      payment,
-    });
+    // RevenueCat requires a 200 OK response immediately
+    return res.status(200).send('Webhook processed');
   } catch (err) {
-    console.error('confirmRevenueCatPurchase Error:', err);
-    return res.status(500).json({ success: false, message: 'Failed to confirm purchase.' });
+    console.error('Webhook Error:', err);
+    return res.status(500).send('Server Error');
   }
 };
