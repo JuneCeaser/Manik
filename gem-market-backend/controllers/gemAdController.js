@@ -233,7 +233,22 @@ exports.pushGemAd = async (req, res) => {
     gemAd.bumpedAt = Date.now();
     await gemAd.save();
 
-    return res.json({ success: true, message: 'Ad successfully pushed to the front!', user });
+    // FIXED: Return the formatted user object so the frontend context and RevenueCat don't crash
+    return res.json({ 
+      success: true, 
+      message: 'Ad successfully pushed to the front!', 
+      user: {
+        id: user._id,
+        phone: user.phone,
+        name: user.name,
+        profileImage: user.profileImage,
+        whatsappCountryCode: user.whatsappCountryCode,
+        whatsappNumber: user.whatsappNumber,
+        province: user.province,
+        city: user.city,
+        adCredits: user.adCredits
+      }
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Could not push ad.' });
   }
