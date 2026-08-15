@@ -1,6 +1,7 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Image,
   Pressable,
@@ -31,6 +32,44 @@ type FavoritedGemAd = {
   createdAt: string;
   user: { name: string };
 };
+
+// --- NEW SKELETON LOADER COMPONENTS ---
+const SkeletonCard = ({ styles, colors }: any) => {
+  const opacity = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.8, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [opacity]);
+
+  return (
+    <Animated.View style={[styles.card, { opacity }]}>
+      <View style={styles.cardImage} />
+      <View style={styles.cardBody}>
+        <View style={{ height: 14, backgroundColor: colors.border, borderRadius: 4, marginBottom: 8, width: '80%' }} />
+        <View style={{ height: 14, backgroundColor: colors.border, borderRadius: 4, marginBottom: 12, width: '50%' }} />
+        <View style={{ height: 12, backgroundColor: colors.border, borderRadius: 4, marginBottom: 8, width: '90%' }} />
+        <View style={{ height: 12, backgroundColor: colors.border, borderRadius: 4, width: '60%' }} />
+      </View>
+    </Animated.View>
+  );
+};
+
+const SkeletonGrid = ({ styles, colors }: any) => {
+  const dummyData = [1, 2, 3, 4, 5, 6]; 
+  return (
+    <View style={[styles.listContent, { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingTop: 16 }]}>
+      {dummyData.map((key) => (
+        <SkeletonCard key={key} styles={styles} colors={colors} />
+      ))}
+    </View>
+  );
+};
+// --------------------------------------
 
 export default function FavoritesScreen() {
   const { userToken } = useAuth();
@@ -74,7 +113,6 @@ export default function FavoritesScreen() {
         setPage(pageNumber);
       }
     } catch {
-      // Silently fail 
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -171,10 +209,9 @@ export default function FavoritesScreen() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Text style={styles.headerTitle}>Favorites</Text>
 
+      {/* REPLACED SPINNER WITH SKELETON GRID */}
       {loading && page === 1 ? (
-        <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <SkeletonGrid styles={styles} colors={colors} />
       ) : (
         <FlatList
           data={ads}

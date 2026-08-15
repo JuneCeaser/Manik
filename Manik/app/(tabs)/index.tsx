@@ -1,7 +1,8 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   Modal,
   Pressable,
@@ -12,9 +13,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-// expo-image caches and recycles images far better than the core RN Image
-// component in long lists — swap back to `Image` from 'react-native' if
-// you don't have expo-image installed (`npx expo install expo-image`).
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -56,10 +54,44 @@ type FilterOverrides = Partial<{
 
 const filterCategories = ['All', ...GEM_CATEGORIES];
 
-// Hoisted outside HomeScreen and memoized: this stops every card from being
-// recreated (and RN reconciling all of them) on every parent re-render —
-// e.g. every keystroke in search, every favorite toggle, every filter tap.
-// It only re-renders a given card when ITS OWN props actually change.
+// --- NEW SKELETON LOADER COMPONENTS ---
+const SkeletonCard = ({ styles, colors }: any) => {
+  const opacity = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.8, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [opacity]);
+
+  return (
+    <Animated.View style={[styles.card, { opacity }]}>
+      <View style={styles.cardImage} />
+      <View style={styles.cardBody}>
+        <View style={{ height: 14, backgroundColor: colors.border, borderRadius: 4, marginBottom: 8, width: '80%' }} />
+        <View style={{ height: 14, backgroundColor: colors.border, borderRadius: 4, marginBottom: 12, width: '50%' }} />
+        <View style={{ height: 12, backgroundColor: colors.border, borderRadius: 4, marginBottom: 8, width: '90%' }} />
+        <View style={{ height: 12, backgroundColor: colors.border, borderRadius: 4, width: '60%' }} />
+      </View>
+    </Animated.View>
+  );
+};
+
+const SkeletonGrid = ({ styles, colors }: any) => {
+  const dummyData = [1, 2, 3, 4, 5, 6]; 
+  return (
+    <View style={[styles.listContent, { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }]}>
+      {dummyData.map((key) => (
+        <SkeletonCard key={key} styles={styles} colors={colors} />
+      ))}
+    </View>
+  );
+};
+// --------------------------------------
+
 type GemCardProps = {
   item: PublishedGemAd;
   isFavorited: boolean;
@@ -107,8 +139,6 @@ const GemCard = React.memo(
 );
 GemCard.displayName = 'GemCard';
 
-// Also hoisted + memoized: previously redefined on every HomeScreen render,
-// four times (Color / Shape / Origin / Clarity), each remounting its pills.
 type FilterPillsProps = {
   title: string;
   options: string[];
@@ -137,10 +167,6 @@ FilterPills.displayName = 'FilterPills';
 export default function HomeScreen() {
   const { userToken } = useAuth();
   const { colors, isDark } = useTheme();
-  // useMemo so `styles` is a stable reference across renders (only
-  // recomputed when `colors` actually changes), instead of calling
-  // createStyles(colors) — and rebuilding every StyleSheet object — on
-  // every single render.
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
 
@@ -149,15 +175,12 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
-  // Preferences
   const [prefCurrency, setPrefCurrency] = useState<'LKR' | 'USD'>('LKR');
   const [exchangeRate, setExchangeRate] = useState(300);
 
-  // Core Filters
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Advanced Filters
+  
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
@@ -168,13 +191,10 @@ export default function HomeScreen() {
   const [selectedOrigin, setSelectedOrigin] = useState('All');
   const [selectedClarity, setSelectedClarity] = useState('All');
 
-  // Pagination
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // fetchAds accepts explicit overrides so callers (like resetFilters) don't
-  // have to wait a render cycle for state to update before fetching.
   const fetchAds = useCallback(
     async (
       pageNumber = 1,
@@ -223,7 +243,6 @@ export default function HomeScreen() {
           setPage(pageNumber);
         }
       } catch {
-        // Silently fail
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -273,15 +292,11 @@ export default function HomeScreen() {
       };
 
       initParams();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fetchFavoriteIds, selectedCategory])
   );
 
-  // Debounced live search: fires automatically as the user types, including
-  // when they backspace all the way down to an empty string (which naturally
-  // omits the `search` param above and returns the unfiltered list).
-  const isFirstSearchRender = React.useRef(true);
-  React.useEffect(() => {
+  const isFirstSearchRender = useRef(true);
+  useEffect(() => {
     if (isFirstSearchRender.current) {
       isFirstSearchRender.current = false;
       return;
@@ -291,7 +306,6 @@ export default function HomeScreen() {
     }, 400);
 
     return () => clearTimeout(handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
   const onRefresh = useCallback(async () => {
@@ -315,9 +329,6 @@ export default function HomeScreen() {
     fetchAds(1, prefCurrency, exchangeRate);
   }, [fetchAds, prefCurrency, exchangeRate]);
 
-  // Resets both the filter form fields AND immediately re-fetches the home
-  // screen results using explicit overrides (so it doesn't rely on stale
-  // state from before the reset).
   const resetFilters = useCallback(() => {
     setMinPrice('');
     setMaxPrice('');
@@ -422,7 +433,6 @@ export default function HomeScreen() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Text style={styles.headerTitle}>Manik Gem Market</Text>
 
-      {/* Search & Filter Row */}
       <View style={styles.searchRow}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color={colors.textSecondary} />
@@ -456,10 +466,9 @@ export default function HomeScreen() {
         />
       </View>
 
+      {/* REPLACED SPINNER WITH SKELETON GRID */}
       {loading && page === 1 ? (
-        <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <SkeletonGrid styles={styles} colors={colors} />
       ) : (
         <FlatList
           data={ads}
@@ -471,10 +480,6 @@ export default function HomeScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           onEndReached={loadMoreAds}
           onEndReachedThreshold={0.5}
-          // Perf tuning for large result sets (hundreds–thousands of ads):
-          // render fewer rows up front, cap how many mount per scroll batch,
-          // keep a modest render "window" around the viewport, and unmount
-          // offscreen native views entirely instead of just hiding them.
           initialNumToRender={8}
           maxToRenderPerBatch={8}
           windowSize={7}
@@ -494,7 +499,6 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* Advanced Filter Modal */}
       <Modal visible={filterModalVisible} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
           <View style={styles.modalHeader}>
@@ -572,7 +576,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   cardLocationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   cardLocation: { fontSize: 11, color: colors.textSecondary, marginLeft: 3, flexShrink: 1 },
 
-  // Modal Styles
   modalContainer: { flex: 1 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
   modalTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
