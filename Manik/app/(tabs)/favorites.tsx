@@ -13,6 +13,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -150,7 +151,9 @@ export default function FavoritesScreen() {
 
   const removeFavorite = async (adId: string) => {
     if (!userToken) return;
-    
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
     const previousAds = [...ads];
     setAds((prev) => prev.filter((ad) => ad._id !== adId));
 

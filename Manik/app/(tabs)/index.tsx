@@ -17,6 +17,7 @@ import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -358,6 +359,8 @@ export default function HomeScreen() {
         Alert.alert('Login Required', 'Please log in to save favorites.');
         return;
       }
+
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
       const wasFavorited = favoriteIds.has(adId);
       setFavoriteIds((prev) => {

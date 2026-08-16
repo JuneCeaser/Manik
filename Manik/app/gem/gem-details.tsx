@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
@@ -132,6 +133,8 @@ export default function GemDetailsScreen() {
       return;
     }
     if (!id) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     setFavoriteLoading(true);
     const wasFavorited = isFavorited;
