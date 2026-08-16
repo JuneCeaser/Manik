@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { 
+  ActivityIndicator, 
+  Alert, 
+  KeyboardAvoidingView, 
+  Platform, 
+  Pressable, 
+  ScrollView, 
+  StyleSheet, 
+  Text, 
+  TextInput, 
+  View 
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,13 +39,18 @@ export default function LoginScreen() {
   useEffect(() => {
     // Configure Google Sign in
     GoogleSignin.configure({
-      webClientId: 'YOUR_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com', // Replace with your Web Client ID
+      webClientId: '1033299983101-r7kc7fus3odp3hbv2mmnhh04bl065s54.apps.googleusercontent.com', 
     });
   }, []);
 
   const handlePhoneLogin = async () => {
-    if (!phone.trim() || !password.trim()) return Alert.alert('Missing information', 'Please enter your phone number and password.');
-    if (phone.replace(/\D/g, '').length < 9) return Alert.alert('Invalid phone number', 'Please enter a valid phone number.');
+    if (!phone.trim() || !password.trim()) {
+      return Alert.alert('Missing information', 'Please enter your phone number and password.');
+    }
+    
+    if (phone.replace(/\D/g, '').length < 9) {
+      return Alert.alert('Invalid phone number', 'Please enter a valid phone number.');
+    }
     
     setLoading(true);
     try {
@@ -44,6 +60,7 @@ export default function LoginScreen() {
         body: JSON.stringify({ phone: buildFullPhoneNumber(country, phone), password }),
       });
       const data = await response.json();
+      
       if (data.success) {
         await loginState(data.token, data.user);
         router.replace('/(tabs)');
@@ -52,7 +69,9 @@ export default function LoginScreen() {
       }
     } catch (error) {
       Alert.alert('Connection problem', 'Unable to connect to Manik. Please check your internet connection.');
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleGoogleLogin = async () => {
@@ -60,14 +79,15 @@ export default function LoginScreen() {
     try {
       await GoogleSignin.hasPlayServices();
       const userInfo = await GoogleSignin.signIn();
-// In version 11+, the token is inside the 'data' object
-const idToken = userInfo.data?.idToken;
+      
+      // Extract token correctly for v11+
+      const idToken = userInfo.data?.idToken;
 
-if (!idToken) {
-  Alert.alert('Error', 'No ID token found from Google.');
-  setSocialLoading(false);
-  return;
-}
+      if (!idToken) {
+        Alert.alert('Login failed', 'No ID token received from Google.');
+        setSocialLoading(false);
+        return;
+      }
 
       const response = await fetch(`${API_BASE_URL}/google`, {
         method: 'POST',
@@ -76,6 +96,7 @@ if (!idToken) {
       });
 
       const data = await response.json();
+      
       if (data.success) {
         await loginState(data.token, data.user);
         router.replace('/(tabs)');
@@ -84,9 +105,11 @@ if (!idToken) {
       }
     } catch (error: any) {
       if (error.code !== 'SIGN_IN_CANCELLED') {
-        Alert.alert('Google Sign-In Error', 'Could not complete Google sign-in.');
+        Alert.alert('Google Sign-In Error', error.message || 'Could not complete Google sign-in.');
       }
-    } finally { setSocialLoading(false); }
+    } finally { 
+      setSocialLoading(false); 
+    }
   };
 
   const handleAppleLogin = async () => {
@@ -110,6 +133,7 @@ if (!idToken) {
       });
 
       const data = await response.json();
+      
       if (data.success) {
         await loginState(data.token, data.user);
         router.replace('/(tabs)');
@@ -120,7 +144,9 @@ if (!idToken) {
       if (error.code !== 'ERR_REQUEST_CANCELED') {
         Alert.alert('Apple Sign-In Error', 'Could not complete Apple sign-in.');
       }
-    } finally { setSocialLoading(false); }
+    } finally { 
+      setSocialLoading(false); 
+    }
   };
 
   return (
@@ -147,7 +173,17 @@ if (!idToken) {
               <Text style={styles.label}>Phone number</Text>
               <View style={styles.inputWrapper}>
                 <CountryCodePicker selectedCountry={country} onSelect={setCountry} />
-                <TextInput style={styles.input} placeholder="077 123 4567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={phone} onChangeText={setPhone} maxLength={12} autoCapitalize="none" returnKeyType="next" />
+                <TextInput 
+                  style={styles.input} 
+                  placeholder="077 123 4567" 
+                  placeholderTextColor="#94A3B8" 
+                  keyboardType="phone-pad" 
+                  value={phone} 
+                  onChangeText={setPhone} 
+                  maxLength={12} 
+                  autoCapitalize="none" 
+                  returnKeyType="next" 
+                />
               </View>
             </View>
 
@@ -157,7 +193,17 @@ if (!idToken) {
               </View>
               <View style={styles.inputWrapper}>
                 <Ionicons name="lock-closed-outline" size={20} color="#64748B" style={styles.inputIcon} />
-                <TextInput style={styles.input} placeholder="Enter your password" placeholderTextColor="#94A3B8" secureTextEntry={!showPassword} value={password} onChangeText={setPassword} autoCapitalize="none" returnKeyType="done" onSubmitEditing={handlePhoneLogin} />
+                <TextInput 
+                  style={styles.input} 
+                  placeholder="Enter your password" 
+                  placeholderTextColor="#94A3B8" 
+                  secureTextEntry={!showPassword} 
+                  value={password} 
+                  onChangeText={setPassword} 
+                  autoCapitalize="none" 
+                  returnKeyType="done" 
+                  onSubmitEditing={handlePhoneLogin} 
+                />
                 <Pressable onPress={() => setShowPassword(!showPassword)} hitSlop={10}>
                   <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color="#64748B" />
                 </Pressable>
@@ -167,9 +213,24 @@ if (!idToken) {
               </Pressable>
             </View>
 
-            <Pressable onPress={handlePhoneLogin} disabled={loading || socialLoading} style={({ pressed }) => [styles.button, pressed && styles.buttonPressed, (loading || socialLoading) && styles.buttonDisabled]}>
+            <Pressable 
+              onPress={handlePhoneLogin} 
+              disabled={loading || socialLoading} 
+              style={({ pressed }) => [
+                styles.button, 
+                pressed && styles.buttonPressed, 
+                (loading || socialLoading) && styles.buttonDisabled
+              ]}
+            >
               <LinearGradient colors={['#0EA5E9', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.buttonGradient}>
-                {loading ? <ActivityIndicator color="#FFFFFF" size="small" /> : <><Text style={styles.buttonText}>Sign in</Text><Ionicons name="arrow-forward" size={20} color="#FFFFFF" /></>}
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.buttonText}>Sign in</Text>
+                    <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+                  </>
+                )}
               </LinearGradient>
             </Pressable>
 
@@ -181,14 +242,26 @@ if (!idToken) {
 
             {/* Social Buttons */}
             <Pressable onPress={handleGoogleLogin} disabled={socialLoading || loading} style={styles.socialBtn}>
-              <Ionicons name="logo-google" size={20} color="#DB4437" />
-              <Text style={styles.socialBtnText}>Google</Text>
+              {socialLoading ? (
+                <ActivityIndicator color="#DB4437" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={20} color="#DB4437" />
+                  <Text style={styles.socialBtnText}>Google</Text>
+                </>
+              )}
             </Pressable>
 
             {Platform.OS === 'ios' && (
               <Pressable onPress={handleAppleLogin} disabled={socialLoading || loading} style={[styles.socialBtn, { backgroundColor: '#000', borderColor: '#000', marginTop: 12 }]}>
-                <Ionicons name="logo-apple" size={20} color="#FFF" />
-                <Text style={[styles.socialBtnText, { color: '#FFF' }]}>Apple</Text>
+                {socialLoading ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="logo-apple" size={20} color="#FFF" />
+                    <Text style={[styles.socialBtnText, { color: '#FFF' }]}>Apple</Text>
+                  </>
+                )}
               </Pressable>
             )}
 
@@ -203,6 +276,27 @@ if (!idToken) {
             </Pressable>
 
           </View>
+
+          {/* Trust message */}
+          <View style={styles.trustContainer}>
+            <View style={styles.trustItem}>
+              <View style={styles.trustIcon}>
+                <Ionicons name="shield-checkmark-outline" size={17} color="#2563EB" />
+              </View>
+              <Text style={styles.trustText}>Secure account</Text>
+            </View>
+
+            <View style={styles.trustDot} />
+
+            <View style={styles.trustItem}>
+              <View style={styles.trustIcon}>
+                <Ionicons name="diamond-outline" size={17} color="#2563EB" />
+              </View>
+              <Text style={styles.trustText}>Real gemstones</Text>
+            </View>
+          </View>
+
+          <Text style={styles.footerText}>June Ceaser De Soysa</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -240,4 +334,10 @@ const styles = StyleSheet.create({
   socialBtnText: { fontSize: 15, fontWeight: '700', color: '#334155', marginLeft: 10 },
   registerButton: { height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: '#BFDBFE', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FBFF' },
   registerText: { color: '#2563EB', fontSize: 15, fontWeight: '800' },
+  trustContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 25 },
+  trustItem: { flexDirection: 'row', alignItems: 'center' },
+  trustIcon: { width: 28, height: 28, borderRadius: 9, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginRight: 7 },
+  trustText: { fontSize: 11, fontWeight: '600', color: '#64748B' },
+  trustDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', marginHorizontal: 14 },
+  footerText: { textAlign: 'center', fontSize: 10, color: '#94A3B8', lineHeight: 16, marginTop: 18, paddingHorizontal: 20 },
 });

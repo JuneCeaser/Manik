@@ -765,7 +765,16 @@ export default function ProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </ScrollView>
+      {/* Developer Credit */}
+          <View style={styles.developerCredit}>
+            <Text style={styles.versionText}>Manik App v1.0.0</Text>
+            <Text style={styles.developerText}>
+              Designed & Developed by June Ceaser De Soysa
+            </Text>
+          </View>
+          
+        </ScrollView>
+    
     {/* Fallback mount point. Prefer moving <Toast /> to your root layout
         (see notes) so toasts still render after this screen unmounts —
         e.g. right before logout() navigates away. */}
@@ -908,4 +917,21 @@ const createStyles = (colors: any) => StyleSheet.create({
   countryFlag: { fontSize: 20, marginRight: 10 },
   pickerRowText: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text },
   pickerRowMeta: { fontSize: 13.5, fontWeight: '700', color: colors.textSecondary, marginRight: 8 },
+  developerCredit: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    paddingBottom: 10,
+  },
+  versionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  developerText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+  },
 });
