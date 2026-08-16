@@ -1,5 +1,5 @@
 // Replace with your actual local IPv4 address
-export const API_BASE_URL = 'http://192.168.8.100:5000/api/auth';
+export const API_BASE_URL = 'http://192.168.8.101:5000/api/auth';
 
 /**
  * Formats phone numbers for the backend (e.g. 0771234567 -> 94771234567)
