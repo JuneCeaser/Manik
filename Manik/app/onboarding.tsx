@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
@@ -59,6 +60,9 @@ const SLIDES: Slide[] = [
 export default function OnboardingScreen() {
   const router = useRouter();
   const { completeOnboarding } = useAuth();
+  const { colors, isDark } = useTheme();
+  const styles = createStyles(colors);
+  
   const flatListRef = useRef<FlatList<Slide>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -74,7 +78,6 @@ export default function OnboardingScreen() {
       handleFinish();
       return;
     }
-
     flatListRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
   };
 
@@ -85,7 +88,7 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
       {/* Skip */}
       {!isLastSlide && (
@@ -104,8 +107,8 @@ export default function OnboardingScreen() {
         onMomentumScrollEnd={handleScroll}
         renderItem={({ item }) => (
           <View style={[styles.slide, { width }]}>
-            <LinearGradient colors={['#DBEAFE', '#EFF6FF']} style={styles.iconCircle}>
-              <Ionicons name={item.icon} size={56} color="#2563EB" />
+            <LinearGradient colors={[colors.inputBg, colors.inputBg]} style={styles.iconCircle}>
+              <Ionicons name={item.icon} size={56} color={colors.primary} />
             </LinearGradient>
 
             <Text style={styles.title}>{item.title}</Text>
@@ -127,7 +130,7 @@ export default function OnboardingScreen() {
       {/* Next / Get started */}
       <Pressable onPress={handleNext} style={styles.button}>
         <LinearGradient
-          colors={['#0EA5E9', '#2563EB']}
+          colors={[colors.primary, colors.primary]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.buttonGradient}
@@ -142,10 +145,10 @@ export default function OnboardingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   skipButton: {
     position: 'absolute',
@@ -158,7 +161,7 @@ const styles = StyleSheet.create({
   skipText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   slide: {
     alignItems: 'center',
@@ -176,14 +179,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 12,
     letterSpacing: -0.5,
   },
   description: {
     fontSize: 15,
-    color: '#64748B',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -197,19 +200,19 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     marginHorizontal: 4,
   },
   dotActive: {
     width: 22,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   button: {
     marginHorizontal: 22,
     marginBottom: 20,
     borderRadius: 15,
     overflow: 'hidden',
-    shadowColor: '#2563EB',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 7 },
     shadowOpacity: 0.2,
     shadowRadius: 12,

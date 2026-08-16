@@ -52,15 +52,11 @@ const PROVINCE_CITY_MAP: Record<string, string[]> = {
 
 const PROVINCES = Object.keys(PROVINCE_CITY_MAP);
 
-// Small wrapper around react-native-toast-message so every call site stays
-// short and consistent. type controls the toast's color/icon preset
-// ('success' | 'error' | 'info'); text2 is the optional secondary line.
 const showToast = (type: 'success' | 'error' | 'info', text1: string, text2?: string) => {
   Toast.show({ type, text1, text2, position: 'top', visibilityTime: 3000 });
 };
 
 export default function ProfileScreen() {
-  // Added updatePreferredCurrency from context
   const { user, userToken, logout, loginState, updatePreferredCurrency } = useAuth();
   const { colors, theme, setTheme } = useTheme();
   const styles = createStyles(colors);
@@ -86,6 +82,9 @@ export default function ProfileScreen() {
   const [provincePickerVisible, setProvincePickerVisible] = useState(false);
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
 
+  // Check if user is a social/Google user (has no phone number)
+  const isSocialUser = !(user as any)?.phone;
+
   useFocusEffect(
     useCallback(() => {
       getPreferredCurrency().then(setCurrencyPref);
@@ -94,7 +93,7 @@ export default function ProfileScreen() {
 
   const handleCurrencyChange = async (curr: 'LKR' | 'USD') => {
     setCurrencyPref(curr);
-    await updatePreferredCurrency(curr); // This now updates global context properly
+    await updatePreferredCurrency(curr);
   };
 
   const closeModal = () => {
@@ -275,9 +274,25 @@ export default function ProfileScreen() {
       });
       const data = await res.json();
       if (res.status === 401) { logout(); return; }
-      if (data.success) setStep('OTP');
-      else showToast('error', 'Error', data.message);
-    } catch { showToast('error', 'Error', 'Failed to request deletion.'); } finally { setLoading(false); }
+      
+      if (data.success) {
+        if (data.bypass) {
+          // Social user instant deletion
+          showToast('success', 'Account Deleted', 'Your account has been deleted.');
+          closeModal();
+          logout();
+        } else {
+          // Normal phone user - proceed to OTP screen
+          setStep('OTP');
+        }
+      } else {
+        showToast('error', 'Error', data.message);
+      }
+    } catch { 
+      showToast('error', 'Error', 'Failed to request deletion.'); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleVerifyDeleteOtp = async () => {
@@ -290,6 +305,7 @@ export default function ProfileScreen() {
         body: JSON.stringify({ code: otpCode }),
       });
       const data = await res.json();
+      if (res.status === 401) { logout(); return; }
       if (data.success) {
         showToast('success', 'Account Deleted', 'Your account has been deleted.');
         closeModal();
@@ -338,8 +354,8 @@ export default function ProfileScreen() {
 
             <Text style={styles.userName}>{user.name}</Text>
             <View style={styles.phonePill}>
-              <Ionicons name="call-outline" size={12} color={colors.textSecondary} />
-              <Text style={styles.userPhone}>+{user.phone}</Text>
+              <Ionicons name={user.phone ? "call-outline" : "mail-outline"} size={12} color={colors.textSecondary} />
+              <Text style={styles.userPhone}>{user.phone ? `+${user.phone}` : user.email}</Text>
             </View>
           </View>
 
@@ -480,13 +496,15 @@ export default function ProfileScreen() {
                     <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
                   </Pressable>
 
-                  <Pressable style={styles.sheetListRow} onPress={() => { setStep('INPUT'); setActiveModal('CHANGE_PASSWORD'); }}>
-                    <View style={styles.sheetRowIcon}>
-                      <Ionicons name="key-outline" size={18} color={colors.textSecondary} />
-                    </View>
-                    <Text style={styles.sheetRowText}>Change Password</Text>
-                    <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-                  </Pressable>
+                  {!isSocialUser && (
+                    <Pressable style={styles.sheetListRow} onPress={() => { setStep('INPUT'); setActiveModal('CHANGE_PASSWORD'); }}>
+                      <View style={styles.sheetRowIcon}>
+                        <Ionicons name="key-outline" size={18} color={colors.textSecondary} />
+                      </View>
+                      <Text style={styles.sheetRowText}>Change Password</Text>
+                      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                    </Pressable>
+                  )}
 
                   <Pressable style={[styles.sheetListRow, styles.listRowLast]} onPress={() => { setStep('INPUT'); setActiveModal('DELETE_ACCOUNT'); }}>
                     <View style={styles.sheetRowIcon}>
@@ -624,12 +642,13 @@ export default function ProfileScreen() {
               )}
 
               {activeModal === 'DELETE_ACCOUNT' && (
-                step === 'INPUT' ? (
+                isSocialUser ? (
+                  // Google/Apple user flow: Just ask "Are you sure?" and confirm
                   <View>
                     <View style={styles.dangerBanner}>
                       <Ionicons name="warning-outline" size={18} color={colors.danger} />
                       <Text style={styles.dangerBannerText}>
-                        This action is permanent and cannot be undone. All your data and images will be erased.
+                        Are you sure? This action is permanent and cannot be undone. All your data and images will be erased.
                       </Text>
                     </View>
                     <Pressable
@@ -637,33 +656,52 @@ export default function ProfileScreen() {
                       onPress={handleSendDeleteOtp}
                       disabled={loading}
                     >
-                      {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Yes, Send OTP</Text>}
+                      {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Confirm Delete Account</Text>}
                     </Pressable>
                   </View>
                 ) : (
-                  <View>
-                    <Text style={styles.fieldLabel}>Verification Code</Text>
-                    <Text style={styles.infoBannerText}>Enter the 6-digit code sent to your phone to confirm deletion.</Text>
-                    <TextInput
-                      style={[styles.otpInput, { marginTop: 14 }]}
-                      placeholderTextColor={colors.textSecondary}
-                      placeholder="——————"
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      value={otpCode}
-                      onChangeText={setOtpCode}
-                      textContentType="oneTimeCode"
-                      autoComplete="sms-otp"
-                      importantForAutofill="yes"
-                    />
-                    <Pressable
-                      style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.danger }, pressed && styles.rowPressed]}
-                      onPress={handleVerifyDeleteOtp}
-                      disabled={loading}
-                    >
-                      {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Verify & Delete Account</Text>}
-                    </Pressable>
-                  </View>
+                  // Normal phone user flow: Send OTP -> Verify OTP
+                  step === 'INPUT' ? (
+                    <View>
+                      <View style={styles.dangerBanner}>
+                        <Ionicons name="warning-outline" size={18} color={colors.danger} />
+                        <Text style={styles.dangerBannerText}>
+                          This action is permanent and cannot be undone. All your data and images will be erased.
+                        </Text>
+                      </View>
+                      <Pressable
+                        style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.danger }, pressed && styles.rowPressed]}
+                        onPress={handleSendDeleteOtp}
+                        disabled={loading}
+                      >
+                        {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Yes, Send OTP</Text>}
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View>
+                      <Text style={styles.fieldLabel}>Verification Code</Text>
+                      <Text style={styles.infoBannerText}>Enter the 6-digit code sent to your phone to confirm deletion.</Text>
+                      <TextInput
+                        style={[styles.otpInput, { marginTop: 14 }]}
+                        placeholderTextColor={colors.textSecondary}
+                        placeholder="——————"
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        value={otpCode}
+                        onChangeText={setOtpCode}
+                        textContentType="oneTimeCode"
+                        autoComplete="sms-otp"
+                        importantForAutofill="yes"
+                      />
+                      <Pressable
+                        style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.danger }, pressed && styles.rowPressed]}
+                        onPress={handleVerifyDeleteOtp}
+                        disabled={loading}
+                      >
+                        {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryButtonText}>Verify & Delete Account</Text>}
+                      </Pressable>
+                    </View>
+                  )
                 )
               )}
             </Pressable>
@@ -765,19 +803,16 @@ export default function ProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      
       {/* Developer Credit */}
-          <View style={styles.developerCredit}>
-            <Text style={styles.versionText}>Manik App v1.0.0</Text>
-            <Text style={styles.developerText}>
-              Designed & Developed by June Ceaser De Soysa
-            </Text>
-          </View>
-          
-        </ScrollView>
-    
-    {/* Fallback mount point. Prefer moving <Toast /> to your root layout
-        (see notes) so toasts still render after this screen unmounts —
-        e.g. right before logout() navigates away. */}
+      <View style={styles.developerCredit}>
+        <Text style={styles.versionText}>Manik App v1.0.0</Text>
+        <Text style={styles.developerText}>
+          Designed & Developed by June Ceaser De Soysa
+        </Text>
+      </View>
+      
+    </ScrollView>
     <Toast />
     </>
   );

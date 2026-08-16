@@ -3,12 +3,14 @@ const jwt = require('jsonwebtoken'); // For decoding Apple token
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const Otp = require('../models/Otp');
+const GemAd = require('../models/GemAd');
+const Favorite = require('../models/Favorite');
 const generateOtp = require('../utils/generateOtp');
 const sendSms = require('../utils/sendSms');
 const generateToken = require('../utils/generateToken');
 const ImageKit = require('imagekit');
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_WEB_CLIENT_ID); // Set this in your .env
+const googleClient = new OAuth2Client(process.env.GOOGLE_WEB_CLIENT_ID);
 
 const OTP_EXPIRY_MS = (Number(process.env.OTP_EXPIRY_MINUTES) || 5) * 60 * 1000;
 const MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS) || 5;
@@ -274,10 +276,29 @@ exports.sendDeleteAccountOtp = async (req, res) => {
   try {
     const phone = req.user.phone;
     if(!phone) {
-      // Social login bypass - delete instantly since they don't have phone OTP
+      // Social login bypass - delete user, images, and ads instantly
+      const user = await User.findById(req.user._id);
+      if (user && user.profileImageId) {
+        try { await imagekit.deleteFile(user.profileImageId); } catch (e) {}
+      }
+
+      const userAds = await GemAd.find({ user: req.user._id });
+      for (const ad of userAds) {
+        for (const image of ad.images) {
+          if (image.fileId) { try { await imagekit.deleteFile(image.fileId); } catch (e) {} }
+        }
+        if (ad.certificateImage && ad.certificateImage.fileId) {
+          try { await imagekit.deleteFile(ad.certificateImage.fileId); } catch (e) {}
+        }
+      }
+
+      await GemAd.deleteMany({ user: req.user._id });
+      await Favorite.deleteMany({ user: req.user._id });
       await User.findByIdAndDelete(req.user._id);
-      return res.json({ success: true, bypass: true, message: 'Account permanently deleted.' });
+
+      return res.json({ success: true, bypass: true, message: 'Account and associated ads permanently deleted.' });
     }
+
     const code = generateOtp();
     await Otp.findOneAndUpdate({ phone, purpose: 'delete_account' }, { code, attempts: 0, expiresAt: new Date(Date.now() + OTP_EXPIRY_MS) }, { upsert: true, new: true });
     const smsPhone = formatForSms(phone);
@@ -294,12 +315,27 @@ exports.verifyDeleteAccountOtp = async (req, res) => {
     if (!otpRecord || otpRecord.code !== code) return res.status(400).json({ success: false, message: 'Incorrect or expired OTP.' });
     
     const user = await User.findById(req.user._id);
+
     if (user && user.profileImageId) {
-      try { await imagekit.deleteFile(user.profileImageId); } catch (imgError) {}
+      try { await imagekit.deleteFile(user.profileImageId); } catch (e) {}
     }
+
+    const userAds = await GemAd.find({ user: req.user._id });
+    for (const ad of userAds) {
+      for (const image of ad.images) {
+        if (image.fileId) { try { await imagekit.deleteFile(image.fileId); } catch (e) {} }
+      }
+      if (ad.certificateImage && ad.certificateImage.fileId) {
+        try { await imagekit.deleteFile(ad.certificateImage.fileId); } catch (e) {}
+      }
+    }
+
+    await GemAd.deleteMany({ user: req.user._id });
+    await Favorite.deleteMany({ user: req.user._id });
     await User.findByIdAndDelete(req.user._id);
     await Otp.deleteMany({ phone });
-    return res.json({ success: true, message: 'Account permanently deleted.' });
+
+    return res.json({ success: true, message: 'Account and associated ads permanently deleted.' });
   } catch (err) { return res.status(500).json({ success: false, message: 'Could not delete account.' }); }
 };
 
@@ -323,31 +359,17 @@ exports.uploadProfileImage = async (req, res) => {
 exports.googleLogin = async (req, res) => {
   try {
     const { idToken } = req.body;
-    
-    // Verify the Google token
-    const ticket = await googleClient.verifyIdToken({
-      idToken,
-      // audience: process.env.GOOGLE_WEB_CLIENT_ID,  // Uncomment and verify if needed
-    });
-    
+    const ticket = await googleClient.verifyIdToken({ idToken });
     const payload = ticket.getPayload();
     const { sub: googleId, email, name, picture } = payload;
 
-    // Find or create user
     let user = await User.findOne({ googleId });
-    
     if (!user) {
-      // Check if email already exists from Apple login
-      if (email) {
-        user = await User.findOne({ email });
-      }
-      
+      if (email) user = await User.findOne({ email });
       if (user) {
-        // Link Google ID to existing email account
         user.googleId = googleId;
         await user.save();
       } else {
-        // Create brand new user
         user = await User.create({
           name: name || 'Google User',
           email,
@@ -373,27 +395,18 @@ exports.googleLogin = async (req, res) => {
 exports.appleLogin = async (req, res) => {
   try {
     const { identityToken, email, fullName } = req.body;
-    
-    // Decode Apple token (Signature verification is best practice, but decoding gets the sub securely enough if over HTTPS)
     const decodedToken = jwt.decode(identityToken);
-    if (!decodedToken || !decodedToken.sub) {
-      return res.status(400).json({ success: false, message: 'Invalid Apple Token' });
-    }
+    if (!decodedToken || !decodedToken.sub) return res.status(400).json({ success: false, message: 'Invalid Apple Token' });
     const appleId = decodedToken.sub;
     const tokenEmail = decodedToken.email || email;
 
     let user = await User.findOne({ appleId });
-    
     if (!user) {
-      if (tokenEmail) {
-        user = await User.findOne({ email: tokenEmail });
-      }
+      if (tokenEmail) user = await User.findOne({ email: tokenEmail });
       if (user) {
-        // Link Apple ID
         user.appleId = appleId;
         await user.save();
       } else {
-        // Create new
         const name = fullName ? `${fullName.givenName || ''} ${fullName.familyName || ''}`.trim() : 'Apple User';
         user = await User.create({
           name: name || 'Apple User',

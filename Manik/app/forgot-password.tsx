@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+import { useTheme } from '../context/ThemeContext';
 import { API_BASE_URL } from '../constants/api';
 import CountryCodePicker, {
   Country,
@@ -28,6 +29,8 @@ type Step = 'PHONE' | 'OTP';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const { colors, isDark } = useTheme();
+  const styles = createStyles(colors);
 
   const [step, setStep] = useState<Step>('PHONE');
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
@@ -109,14 +112,14 @@ export default function ForgotPasswordScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           
           {/* Top Bar */}
           <View style={styles.topBar}>
             <Pressable onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={21} color="#0F172A" />
+              <Ionicons name="arrow-back" size={21} color={colors.text} />
             </Pressable>
             <Text style={styles.topTitle}>Reset Password</Text>
             <View style={{ width: 42 }} />
@@ -139,7 +142,7 @@ export default function ForgotPasswordScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder="077 123 4567"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={colors.textSecondary}
                       keyboardType="phone-pad"
                       value={phone}
                       onChangeText={setPhone}
@@ -149,7 +152,7 @@ export default function ForgotPasswordScreen() {
                 </View>
 
                 <Pressable onPress={handleSendOtp} disabled={loading} style={styles.button}>
-                  <LinearGradient colors={['#0EA5E9', '#2563EB']} style={styles.buttonGradient}>
+                  <LinearGradient colors={[colors.primary, colors.primary]} style={styles.buttonGradient}>
                     {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Send Code</Text>}
                   </LinearGradient>
                 </Pressable>
@@ -164,7 +167,7 @@ export default function ForgotPasswordScreen() {
                 <TextInput
                   style={styles.otpInput}
                   placeholder="000000"
-                  placeholderTextColor="#CBD5E1"
+                  placeholderTextColor={colors.textSecondary}
                   keyboardType="number-pad"
                   value={otpCode}
                   onChangeText={(val) => setOtpCode(val.replace(/\D/g, '').slice(0, 6))}
@@ -177,13 +180,13 @@ export default function ForgotPasswordScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder="At least 6 characters"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={colors.textSecondary}
                       secureTextEntry={!showPassword}
                       value={newPassword}
                       onChangeText={setNewPassword}
                     />
                     <Pressable onPress={() => setShowPassword(!showPassword)}>
-                      <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color="#64748B" />
+                      <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color={colors.textSecondary} />
                     </Pressable>
                   </View>
                 </View>
@@ -194,7 +197,7 @@ export default function ForgotPasswordScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder="Re-enter new password"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={colors.textSecondary}
                       secureTextEntry={!showPassword}
                       value={confirmPassword}
                       onChangeText={setConfirmPassword}
@@ -203,7 +206,7 @@ export default function ForgotPasswordScreen() {
                 </View>
 
                 <Pressable onPress={handleResetPassword} disabled={loading} style={styles.button}>
-                  <LinearGradient colors={['#0EA5E9', '#2563EB']} style={styles.buttonGradient}>
+                  <LinearGradient colors={[colors.primary, colors.primary]} style={styles.buttonGradient}>
                     {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Update Password</Text>}
                   </LinearGradient>
                 </Pressable>
@@ -216,21 +219,21 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+const createStyles = (colors: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { paddingHorizontal: 22, paddingTop: 20, paddingBottom: 30 },
   topBar: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  backButton: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
-  topTitle: { fontSize: 15, fontWeight: '700', color: '#334155' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 22, elevation: 4 },
-  title: { fontSize: 24, fontWeight: '800', color: '#0F172A' },
-  subtitle: { fontSize: 14, color: '#64748B', marginTop: 7, marginBottom: 24 },
+  backButton: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
+  topTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+  card: { backgroundColor: colors.card, borderRadius: 24, padding: 22, elevation: 4 },
+  title: { fontSize: 24, fontWeight: '800', color: colors.text },
+  subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 7, marginBottom: 24 },
   field: { marginBottom: 18 },
-  label: { fontSize: 13, fontWeight: '700', color: '#334155', marginBottom: 8 },
-  inputWrapper: { height: 54, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, backgroundColor: '#F8FAFC', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15 },
+  label: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  inputWrapper: { height: 54, borderWidth: 1, borderColor: colors.border, borderRadius: 14, backgroundColor: colors.inputBg, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15 },
   inputIcon: { marginRight: 11 },
-  input: { flex: 1, height: '100%', color: '#0F172A', fontSize: 15 },
-  otpInput: { height: 60, borderRadius: 16, borderWidth: 1.5, borderColor: '#BFDBFE', backgroundColor: '#F8FBFF', fontSize: 24, fontWeight: '800', textAlign: 'center', letterSpacing: 8, marginBottom: 20 },
+  input: { flex: 1, height: '100%', color: colors.text, fontSize: 15 },
+  otpInput: { height: 60, borderRadius: 16, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.inputBg, fontSize: 24, fontWeight: '800', textAlign: 'center', letterSpacing: 8, marginBottom: 20, color: colors.text },
   button: { borderRadius: 15, overflow: 'hidden', marginTop: 10 },
   buttonGradient: { height: 55, alignItems: 'center', justifyContent: 'center' },
   buttonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },

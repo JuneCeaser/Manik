@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Payment = require('../models/Payment');
 const Notification = require('../models/Notification');
 const GemAd = require('../models/GemAd');
+const Favorite = require('../models/Favorite');
 const bcrypt = require('bcryptjs');
 const generateToken = require('../utils/generateToken');
 const sendSms = require('../utils/sendSms');
@@ -14,8 +15,6 @@ const imagekit = new ImageKit({
   urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
 });
 
-// Helper to format old numbers (e.g., 077...) to international for Text.lk
-// without breaking new numbers that already have country codes.
 const formatForSms = (phone) => {
   let clean = phone.replace(/\D/g, '');
   if (phone.startsWith('0')) {
@@ -24,14 +23,9 @@ const formatForSms = (phone) => {
   return clean;
 };
 
-// --------------------------------------------------------------------------
-// ADMIN AUTHENTICATION
-// --------------------------------------------------------------------------
-
 exports.createFirstAdmin = async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    
     const adminExists = await Admin.findOne({ email });
     if (adminExists) return res.status(400).json({ message: 'Admin already exists' });
 
@@ -47,22 +41,14 @@ exports.createFirstAdmin = async (req, res) => {
 exports.loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
-
     const admin = await Admin.findOne({ email }).select('+password');
-    if (!admin) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    }
-
-    const isMatch = await admin.matchPassword(password);
-    if (!isMatch) {
+    if (!admin || !(await admin.matchPassword(password))) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     const token = generateToken(admin);
-
     return res.json({
-      success: true,
-      token,
+      success: true, token,
       admin: { id: admin._id, name: admin.name, email: admin.email }
     });
   } catch (err) {
@@ -70,9 +56,6 @@ exports.loginAdmin = async (req, res) => {
   }
 };
 
-// --------------------------------------------------------------------------
-// ADMIN DASHBOARD ACTIONS (Protected)
-// --------------------------------------------------------------------------
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await User.find({}).select('-password').sort({ createdAt: -1 });
@@ -88,29 +71,33 @@ exports.deleteUser = async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
 
     if (user.profileImageId) {
-      try {
-        await imagekit.deleteFile(user.profileImageId);
-      } catch (imgError) {
-        console.error('Failed to delete image:', imgError);
+      try { await imagekit.deleteFile(user.profileImageId); } catch (e) {}
+    }
+
+    // Delete user's gem ads and certificate files from ImageKit
+    const userAds = await GemAd.find({ user: req.params.id });
+    for (const ad of userAds) {
+      for (const image of ad.images) {
+        if (image.fileId) { try { await imagekit.deleteFile(image.fileId); } catch (e) {} }
+      }
+      if (ad.certificateImage && ad.certificateImage.fileId) {
+        try { await imagekit.deleteFile(ad.certificateImage.fileId); } catch (e) {}
       }
     }
 
+    await GemAd.deleteMany({ user: req.params.id });
+    await Favorite.deleteMany({ user: req.params.id });
     await User.findByIdAndDelete(req.params.id);
-    return res.json({ success: true, message: 'User deleted.' });
+
+    return res.json({ success: true, message: 'User and all associated ads deleted.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Could not delete user.' });
   }
 };
 
-// --------------------------------------------------------------------------
-// ADMIN PAYMENT APPROVAL ACTIONS
-// --------------------------------------------------------------------------
 exports.getPendingPayments = async (req, res) => {
   try {
-    const payments = await Payment.find({ status: 'PENDING' })
-      .populate('user', 'name phone')
-      .sort({ createdAt: -1 });
-    
+    const payments = await Payment.find({ status: 'PENDING' }).populate('user', 'name phone').sort({ createdAt: -1 });
     return res.json({ success: true, payments });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Failed to fetch pending payments.' });
@@ -120,12 +107,8 @@ exports.getPendingPayments = async (req, res) => {
 exports.approvePayment = async (req, res) => {
   try {
     const payment = await Payment.findById(req.params.id);
-    if (!payment) {
-      return res.status(404).json({ success: false, message: 'Payment not found.' });
-    }
-    if (payment.status !== 'PENDING') {
-      return res.status(400).json({ success: false, message: 'Payment already processed.' });
-    }
+    if (!payment) return res.status(404).json({ success: false, message: 'Payment not found.' });
+    if (payment.status !== 'PENDING') return res.status(400).json({ success: false, message: 'Payment already processed.' });
 
     payment.status = 'APPROVED';
     await payment.save();
@@ -135,7 +118,6 @@ exports.approvePayment = async (req, res) => {
       user.adCredits += payment.adCreditsAdded;
       await user.save();
 
-      // Create in-app notification for the user's notifications page
       try {
         await Notification.create({
           user: user._id,
@@ -144,19 +126,13 @@ exports.approvePayment = async (req, res) => {
           type: 'PAYMENT_APPROVED',
           relatedPaymentId: payment._id,
         });
-      } catch (notifError) {
-        console.error('Failed to create notification:', notifError);
-      }
+      } catch (notifError) {}
 
-      // Send SMS to the user's registered phone number
-      try {
-        const smsPhone = formatForSms(user.phone);
-        await sendSms(
-          smsPhone,
-          `Your Manik payment of Rs. ${payment.amount} has been approved. ${payment.adCreditsAdded} Ad Credits have been added to your account.`
-        );
-      } catch (smsError) {
-        console.error('Failed to send SMS notification:', smsError);
+      if (user.phone && user.authProvider === 'PHONE') {
+        try {
+          const smsPhone = formatForSms(user.phone);
+          await sendSms(smsPhone, `Your Manik payment of Rs. ${payment.amount} has been approved. ${payment.adCreditsAdded} Ad Credits have been added to your account.`);
+        } catch (smsError) {}
       }
     }
 
@@ -166,15 +142,9 @@ exports.approvePayment = async (req, res) => {
   }
 };
 
-// --------------------------------------------------------------------------
-// ADMIN GEM AD APPROVAL ACTIONS
-// --------------------------------------------------------------------------
 exports.getPendingGemAds = async (req, res) => {
   try {
-    const gemAds = await GemAd.find({ status: 'PENDING' })
-      .populate('user', 'name phone')
-      .sort({ createdAt: -1 });
-
+    const gemAds = await GemAd.find({ status: 'PENDING' }).populate('user', 'name phone').sort({ createdAt: -1 });
     return res.json({ success: true, gemAds });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Failed to fetch pending ads.' });
@@ -183,36 +153,25 @@ exports.getPendingGemAds = async (req, res) => {
 
 exports.approveGemAd = async (req, res) => {
   try {
-    // 1. Add .populate('user') so we can access the user's phone number
     const gemAd = await GemAd.findById(req.params.id).populate('user');
-    
-    if (!gemAd) {
-      return res.status(404).json({ success: false, message: 'Ad not found.' });
-    }
-    if (gemAd.status === 'APPROVED') {
-      return res.status(400).json({ success: false, message: 'Ad already approved.' });
-    }
+    if (!gemAd) return res.status(404).json({ success: false, message: 'Ad not found.' });
+    if (gemAd.status === 'APPROVED') return res.status(400).json({ success: false, message: 'Ad already approved.' });
 
-    // 2. Mark as approved
     gemAd.status = 'APPROVED';
     await gemAd.save();
 
-    // 3. Create In-App Notification
     try {
       await Notification.create({
-        user: gemAd.user._id, // ._id is needed here because user is now populated
+        user: gemAd.user._id,
         title: 'Ad Approved',
         message: `Your ad "${gemAd.title}" has been approved and is now live on Manik.`,
         type: 'AD_APPROVED',
         relatedGemAdId: gemAd._id,
       });
-    } catch (notifError) {
-      console.error('Failed to create ad approval notification:', notifError);
-    }
+    } catch (notifError) {}
 
     return res.json({ success: true, message: 'Ad approved and published.' });
   } catch (err) {
-    console.error('approveGemAd error:', err);
     return res.status(500).json({ success: false, message: 'Failed to approve ad.' });
   }
 };

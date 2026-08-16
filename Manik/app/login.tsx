@@ -22,12 +22,15 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
 
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { API_BASE_URL } from '../constants/api';
 import CountryCodePicker, { Country, DEFAULT_COUNTRY, buildFullPhoneNumber } from '../components/CountryCodePicker';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { loginState } = useAuth();
+  const { colors, isDark } = useTheme();
+  const styles = createStyles(colors);
 
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [phone, setPhone] = useState('');
@@ -151,13 +154,13 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           
           <View style={styles.header}>
             <View style={styles.logoWrapper}>
-              <LinearGradient colors={['#38BDF8', '#2563EB']} style={styles.logo}>
+              <LinearGradient colors={[colors.primary, colors.primary]} style={styles.logo}>
                 <Ionicons name="diamond" size={27} color="#FFFFFF" />
               </LinearGradient>
             </View>
@@ -176,7 +179,7 @@ export default function LoginScreen() {
                 <TextInput 
                   style={styles.input} 
                   placeholder="077 123 4567" 
-                  placeholderTextColor="#94A3B8" 
+                  placeholderTextColor={colors.textSecondary} 
                   keyboardType="phone-pad" 
                   value={phone} 
                   onChangeText={setPhone} 
@@ -192,11 +195,11 @@ export default function LoginScreen() {
                 <Text style={styles.label}>Password</Text>
               </View>
               <View style={styles.inputWrapper}>
-                <Ionicons name="lock-closed-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
                 <TextInput 
                   style={styles.input} 
                   placeholder="Enter your password" 
-                  placeholderTextColor="#94A3B8" 
+                  placeholderTextColor={colors.textSecondary} 
                   secureTextEntry={!showPassword} 
                   value={password} 
                   onChangeText={setPassword} 
@@ -205,7 +208,7 @@ export default function LoginScreen() {
                   onSubmitEditing={handlePhoneLogin} 
                 />
                 <Pressable onPress={() => setShowPassword(!showPassword)} hitSlop={10}>
-                  <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color="#64748B" />
+                  <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color={colors.textSecondary} />
                 </Pressable>
               </View>
               <Pressable onPress={() => router.push('/forgot-password')}>
@@ -222,7 +225,7 @@ export default function LoginScreen() {
                 (loading || socialLoading) && styles.buttonDisabled
               ]}
             >
-              <LinearGradient colors={['#0EA5E9', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.buttonGradient}>
+              <LinearGradient colors={[colors.primary, colors.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.buttonGradient}>
                 {loading ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
@@ -253,13 +256,17 @@ export default function LoginScreen() {
             </Pressable>
 
             {Platform.OS === 'ios' && (
-              <Pressable onPress={handleAppleLogin} disabled={socialLoading || loading} style={[styles.socialBtn, { backgroundColor: '#000', borderColor: '#000', marginTop: 12 }]}>
+              <Pressable 
+                onPress={handleAppleLogin} 
+                disabled={socialLoading || loading} 
+                style={[styles.socialBtn, { backgroundColor: isDark ? '#FFFFFF' : '#000000', borderColor: isDark ? '#FFFFFF' : '#000000', marginTop: 12 }]}
+              >
                 {socialLoading ? (
-                  <ActivityIndicator color="#FFF" size="small" />
+                  <ActivityIndicator color={isDark ? '#000000' : '#FFFFFF'} size="small" />
                 ) : (
                   <>
-                    <Ionicons name="logo-apple" size={20} color="#FFF" />
-                    <Text style={[styles.socialBtnText, { color: '#FFF' }]}>Apple</Text>
+                    <Ionicons name="logo-apple" size={20} color={isDark ? '#000000' : '#FFFFFF'} />
+                    <Text style={[styles.socialBtnText, { color: isDark ? '#000000' : '#FFFFFF' }]}>Apple</Text>
                   </>
                 )}
               </Pressable>
@@ -281,7 +288,7 @@ export default function LoginScreen() {
           <View style={styles.trustContainer}>
             <View style={styles.trustItem}>
               <View style={styles.trustIcon}>
-                <Ionicons name="shield-checkmark-outline" size={17} color="#2563EB" />
+                <Ionicons name="shield-checkmark-outline" size={17} color={colors.primary} />
               </View>
               <Text style={styles.trustText}>Secure account</Text>
             </View>
@@ -290,7 +297,7 @@ export default function LoginScreen() {
 
             <View style={styles.trustItem}>
               <View style={styles.trustIcon}>
-                <Ionicons name="diamond-outline" size={17} color="#2563EB" />
+                <Ionicons name="diamond-outline" size={17} color={colors.primary} />
               </View>
               <Text style={styles.trustText}>Real gemstones</Text>
             </View>
@@ -303,41 +310,41 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 55, paddingBottom: 30 },
   header: { alignItems: 'center', marginBottom: 30 },
-  logoWrapper: { marginBottom: 14, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 15, elevation: 7 },
+  logoWrapper: { marginBottom: 14, shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 15, elevation: 7 },
   logo: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  brand: { fontSize: 30, fontWeight: '800', color: '#0F172A', letterSpacing: -0.8 },
-  tagline: { marginTop: 6, fontSize: 14, color: '#64748B', textAlign: 'center' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 22, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.06, shadowRadius: 24, elevation: 4 },
-  title: { fontSize: 25, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
-  subtitle: { fontSize: 14, color: '#64748B', lineHeight: 21, marginTop: 7, marginBottom: 25 },
+  brand: { fontSize: 30, fontWeight: '800', color: colors.text, letterSpacing: -0.8 },
+  tagline: { marginTop: 6, fontSize: 14, color: colors.textSecondary, textAlign: 'center' },
+  card: { backgroundColor: colors.card, borderRadius: 24, padding: 22, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.06, shadowRadius: 24, elevation: 4 },
+  title: { fontSize: 25, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+  subtitle: { fontSize: 14, color: colors.textSecondary, lineHeight: 21, marginTop: 7, marginBottom: 25 },
   fieldContainer: { marginBottom: 18 },
   labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  label: { fontSize: 13, fontWeight: '700', color: '#334155', marginBottom: 8 },
-  forgotText: { color: '#2563EB', fontSize: 12, fontWeight: '700', marginTop: 6, marginLeft: 'auto' },
-  inputWrapper: { height: 54, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, backgroundColor: '#F8FAFC', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15 },
+  label: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  forgotText: { color: colors.primary, fontSize: 12, fontWeight: '700', marginTop: 6, marginLeft: 'auto' },
+  inputWrapper: { height: 54, borderWidth: 1, borderColor: colors.border, borderRadius: 14, backgroundColor: colors.inputBg, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15 },
   inputIcon: { marginRight: 11 },
-  input: { flex: 1, height: '100%', fontSize: 15, color: '#0F172A' },
-  button: { marginTop: 5, borderRadius: 15, overflow: 'hidden', shadowColor: '#2563EB', shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 5 },
+  input: { flex: 1, height: '100%', fontSize: 15, color: colors.text },
+  button: { marginTop: 5, borderRadius: 15, overflow: 'hidden', shadowColor: colors.primary, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 5 },
   buttonPressed: { transform: [{ scale: 0.985 }] },
   buttonDisabled: { opacity: 0.7 },
   buttonGradient: { height: 55, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 23 },
-  divider: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
-  dividerText: { fontSize: 9, fontWeight: '800', color: '#94A3B8', marginHorizontal: 10, letterSpacing: 0.8 },
-  socialBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#FFF' },
-  socialBtnText: { fontSize: 15, fontWeight: '700', color: '#334155', marginLeft: 10 },
-  registerButton: { height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: '#BFDBFE', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FBFF' },
-  registerText: { color: '#2563EB', fontSize: 15, fontWeight: '800' },
+  divider: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { fontSize: 9, fontWeight: '800', color: colors.textSecondary, marginHorizontal: 10, letterSpacing: 0.8 },
+  socialBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  socialBtnText: { fontSize: 15, fontWeight: '700', color: colors.text, marginLeft: 10 },
+  registerButton: { height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.inputBg },
+  registerText: { color: colors.primary, fontSize: 15, fontWeight: '800' },
   trustContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 25 },
   trustItem: { flexDirection: 'row', alignItems: 'center' },
-  trustIcon: { width: 28, height: 28, borderRadius: 9, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginRight: 7 },
-  trustText: { fontSize: 11, fontWeight: '600', color: '#64748B' },
-  trustDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', marginHorizontal: 14 },
-  footerText: { textAlign: 'center', fontSize: 10, color: '#94A3B8', lineHeight: 16, marginTop: 18, paddingHorizontal: 20 },
+  trustIcon: { width: 28, height: 28, borderRadius: 9, backgroundColor: colors.inputBg, alignItems: 'center', justifyContent: 'center', marginRight: 7 },
+  trustText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+  trustDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.border, marginHorizontal: 14 },
+  footerText: { textAlign: 'center', fontSize: 10, color: colors.textSecondary, lineHeight: 16, marginTop: 18, paddingHorizontal: 20 },
 });
