@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Purchases from 'react-native-purchases';
+import { GoogleSignin } from '@react-native-google-signin/google-signin'; // <-- Imported for Google session cleanup
 
 type AuthContextType = {
   user: any;
@@ -88,6 +89,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const logout = async () => {
+    try {
+      // Clear local Google account session so account picker shows up on next login
+      await GoogleSignin.signOut();
+    } catch (error) {
+      // Safe to ignore if user was logged in via phone number or Apple instead of Google
+    }
+
     setUserToken(null);
     setUser(null);
     await AsyncStorage.removeItem('userToken');
