@@ -177,7 +177,7 @@ export default function FavoritesScreen() {
       <View style={styles.imageWrapper}>
         <Image source={{ uri: item.images[0]?.url }} style={styles.cardImage} />
         <Pressable style={styles.heartButton} onPress={() => removeFavorite(item._id)}>
-          <Ionicons name="heart" size={18} color={colors.danger} />
+          <Ionicons name="diamond" size={18} color={colors.danger} />
         </Pressable>
       </View>
       <View style={styles.cardBody}>
@@ -200,7 +200,7 @@ export default function FavoritesScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.centerContent}>
-          <Ionicons name="heart-outline" size={48} color={colors.border} />
+          <Ionicons name="diamond-outline" size={48} color={colors.border} />
           <Text style={styles.emptyText}>Please log in to view favorites.</Text>
         </View>
       </SafeAreaView>
@@ -233,7 +233,7 @@ export default function FavoritesScreen() {
           }
           ListEmptyComponent={
             <View style={styles.centerContent}>
-              <Ionicons name="heart-outline" size={48} color={colors.border} />
+              <Ionicons name="diamond-outline" size={48} color={colors.border} />
               <Text style={styles.emptyText}>No favorites yet.</Text>
             </View>
           }

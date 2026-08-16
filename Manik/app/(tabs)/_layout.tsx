@@ -103,7 +103,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="favorites"
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon name="heart" focused={focused} colors={colors} />,
+          tabBarIcon: ({ focused }) => <TabIcon name="diamond" focused={focused} colors={colors} />,
         }}
       />
       <Tabs.Screen
@@ -132,16 +132,12 @@ export default function TabsLayout() {
         }}
       />
 
-
-
       <Tabs.Screen
         name="my-ads"
         options={{
           href: null, 
         }}
       />
-
-    
     </Tabs>
   );
 }

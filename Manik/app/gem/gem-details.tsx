@@ -205,7 +205,7 @@ export default function GemDetailsScreen() {
           </Pressable>
 
           <Pressable style={styles.favoriteButton} onPress={toggleFavorite} disabled={favoriteLoading}>
-            <Ionicons name={isFavorited ? 'heart' : 'heart-outline'} size={20} color={isFavorited ? colors.danger : colors.text} />
+            <Ionicons name={isFavorited ? 'diamond' : 'diamond-outline'} size={20} color={isFavorited ? colors.danger : colors.text} />
           </Pressable>
 
           {ad.images.length > 1 && (

@@ -116,7 +116,7 @@ const GemCard = React.memo(
         />
         <Pressable style={styles.heartButton} onPress={() => onToggleFavorite(item._id)}>
           <Ionicons
-            name={isFavorited ? 'heart' : 'heart-outline'}
+            name={isFavorited ? 'diamond' : 'diamond-outline'}
             size={18}
             color={isFavorited ? colors.danger : colors.textSecondary}
           />
