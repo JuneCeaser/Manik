@@ -1,5 +1,3 @@
-// authRoutes.js
-
 const express = require('express');
 const router = express.Router();
 const protect = require('../middleware/authMiddleware');
@@ -8,6 +6,8 @@ const {
   sendRegisterOtp,
   verifyRegisterOtp,
   login,
+  googleLogin,
+  appleLogin,
   sendForgotPasswordOtp,
   verifyForgotPasswordOtp,
   sendChangePasswordOtp,
@@ -26,6 +26,10 @@ router.post('/register/send-otp', otpRateLimiter, sendRegisterOtp);
 router.post('/register/verify-otp', verifyRegisterOtp);
 router.post('/login', login);
 
+// Social Login routes
+router.post('/google', googleLogin);
+router.post('/apple', appleLogin);
+
 router.post('/forgot-password/send-otp', otpRateLimiter, sendForgotPasswordOtp);
 router.post('/forgot-password/verify-otp', verifyForgotPasswordOtp);
 
@@ -40,7 +44,7 @@ router.post('/delete-account/verify-otp', protect, verifyDeleteAccountOtp);
 router.put('/change-name', protect, changeName);
 router.put('/profile-image', protect, uploadProfileImage);
 router.put('/whatsapp-number', protect, updateWhatsappNumber);
-router.put('/location', protect, updateLocation); // <-- new
+router.put('/location', protect, updateLocation);
 router.get('/profile', protect, getUserProfile);
 
 module.exports = router;

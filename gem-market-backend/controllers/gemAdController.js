@@ -41,7 +41,7 @@ exports.createGemAd = async (req, res) => {
     const {
       title, category, price, weightCarats, color, shape, treatment, origin, clarity, dimensions,
       certification, description, images, certificateImage, province, city,
-      contactPhone, hidePhoneNumber,
+      contactPhone, hidePhoneNumber, whatsappCountryCode, whatsappNumber
     } = req.body;
 
     if (!Array.isArray(images) || images.length < 1 || images.length > 5) {
@@ -59,6 +59,13 @@ exports.createGemAd = async (req, res) => {
         code: 'INSUFFICIENT_CREDITS',
         message: `You need ${requiredCredits} ad credit(s). You have ${user.adCredits}.`,
       });
+    }
+
+    // Save WhatsApp details to the User profile if provided during Ad creation
+    if (whatsappCountryCode && whatsappNumber) {
+      user.whatsappCountryCode = whatsappCountryCode;
+      user.whatsappNumber = whatsappNumber.replace(/\D/g, '');
+      // user.save() is called below anyway to deduct credits
     }
 
     const gemAd = await GemAd.create({
