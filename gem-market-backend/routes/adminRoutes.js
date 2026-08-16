@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const protectAdmin = require('../middleware/adminMiddleware');
+const { adminLoginRateLimiter } = require('../middleware/loginRateLimiter');
 
 const { 
   createFirstAdmin, 
@@ -16,7 +17,7 @@ const {
 
 // Public Admin Routes
 router.post('/setup', createFirstAdmin);
-router.post('/login', loginAdmin);
+router.post('/login', adminLoginRateLimiter, loginAdmin);
 
 // Protected Admin Routes (Requires Admin JWT)
 router.get('/users', protectAdmin, getAllUsers);

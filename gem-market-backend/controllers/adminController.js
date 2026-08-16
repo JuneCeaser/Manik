@@ -26,6 +26,16 @@ const formatForSms = (phone) => {
 exports.createFirstAdmin = async (req, res) => {
   try {
     const { name, email, password } = req.body;
+
+    // SECURITY FIX: this used to only check whether an admin with this
+    // exact email already existed, so anyone who found this public route
+    // could keep creating new admin accounts forever with a different
+    // email each time. Once one admin exists, setup is permanently closed.
+    const adminCount = await Admin.countDocuments({});
+    if (adminCount > 0) {
+      return res.status(403).json({ success: false, message: 'Admin setup has already been completed.' });
+    }
+
     const adminExists = await Admin.findOne({ email });
     if (adminExists) return res.status(400).json({ message: 'Admin already exists' });
 

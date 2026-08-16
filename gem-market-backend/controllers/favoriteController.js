@@ -37,7 +37,9 @@ exports.toggleFavorite = async (req, res) => {
 exports.getMyFavorites = async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20; // Load 20 items per scroll
+    // SECURITY FIX: cap the page size so a client can't request an
+    // unbounded number of records in one call (e.g. ?limit=999999).
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
     const skip = (page - 1) * limit;
 
     const favorites = await Favorite.find({ user: req.user._id })

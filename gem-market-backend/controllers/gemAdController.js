@@ -10,6 +10,12 @@ const imagekit = new ImageKit({
 
 const USD_TO_LKR_RATE = Number(process.env.USD_TO_LKR_RATE) || 300;
 
+// SECURITY FIX: escapes regex metacharacters in user-supplied search text
+// before it's used in a Mongo $regex query. Without this, a crafted query
+// (e.g. nested quantifiers) could trigger catastrophic backtracking and
+// hang the database/process (ReDoS).
+const escapeRegex = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const getRequiredCredits = (amount, currency) => {
   const lkrAmount = currency === 'USD' ? amount * USD_TO_LKR_RATE : amount;
   if (lkrAmount < 10000) return 1;
@@ -138,7 +144,9 @@ exports.getGemAdById = async (req, res) => {
 exports.getPublishedGemAds = async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
+    // SECURITY FIX: cap the page size so a client can't request an
+    // unbounded number of records in one call (e.g. ?limit=999999).
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
     const skip = (page - 1) * limit;
 
     const category = req.query.category;
@@ -149,12 +157,15 @@ exports.getPublishedGemAds = async (req, res) => {
 
     // 1. Text Search (Matches Title or Description)
     // Kept as $regex to preserve partial/substring matching behavior.
-    // The { status: 1, bumpedAt: -1 } index still lets Mongo narrow to
+    // The user-supplied text is regex-escaped before use (see escapeRegex
+    // above) so it can't be abused as a ReDoS payload. The
+    // { status: 1, bumpedAt: -1 } index still lets Mongo narrow to
     // approved ads efficiently before scanning for the regex match.
     if (req.query.search) {
+      const safeSearch = escapeRegex(req.query.search);
       query.$or = [
-        { title: { $regex: req.query.search, $options: 'i' } },
-        { description: { $regex: req.query.search, $options: 'i' } },
+        { title: { $regex: safeSearch, $options: 'i' } },
+        { description: { $regex: safeSearch, $options: 'i' } },
       ];
     }
 

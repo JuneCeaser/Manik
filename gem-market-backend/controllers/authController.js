@@ -216,6 +216,10 @@ exports.verifyChangePasswordOtp = async (req, res) => {
     if (!code || !newPassword) return res.status(400).json({ success: false, message: 'Code and new password are required.' });
     const otpRecord = await Otp.findOne({ phone, purpose: 'change_password' });
     if (!otpRecord || otpRecord.expiresAt < new Date()) return res.status(400).json({ success: false, message: 'OTP expired or not found.' });
+    // SECURITY FIX: this endpoint was missing the same attempt-limit check
+    // the other OTP-verify endpoints already have, allowing unlimited
+    // guesses against a single OTP.
+    if (otpRecord.attempts >= MAX_ATTEMPTS) return res.status(429).json({ success: false, message: 'Too many incorrect attempts. Request a new OTP.' });
     if (otpRecord.code !== code) {
       otpRecord.attempts += 1;
       await otpRecord.save();
@@ -312,8 +316,15 @@ exports.verifyDeleteAccountOtp = async (req, res) => {
     const phone = req.user.phone;
     const { code } = req.body;
     const otpRecord = await Otp.findOne({ phone, purpose: 'delete_account' });
-    if (!otpRecord || otpRecord.code !== code) return res.status(400).json({ success: false, message: 'Incorrect or expired OTP.' });
-    
+    if (!otpRecord || otpRecord.expiresAt < new Date()) return res.status(400).json({ success: false, message: 'Incorrect or expired OTP.' });
+    // SECURITY FIX: same missing attempt-limit check as change-password.
+    if (otpRecord.attempts >= MAX_ATTEMPTS) return res.status(429).json({ success: false, message: 'Too many incorrect attempts. Request a new OTP.' });
+    if (otpRecord.code !== code) {
+      otpRecord.attempts += 1;
+      await otpRecord.save();
+      return res.status(400).json({ success: false, message: 'Incorrect or expired OTP.' });
+    }
+
     const user = await User.findById(req.user._id);
 
     if (user && user.profileImageId) {
@@ -392,6 +403,13 @@ exports.googleLogin = async (req, res) => {
   }
 };
 
+// TODO (held for later, per request - not touched in this pass):
+// appleLogin currently trusts the identityToken's payload via jwt.decode()
+// without verifying its signature against Apple's public keys. This means
+// the token content (sub/email) is NOT currently authenticated server-side.
+// Before relying on this in production, verify the token's signature,
+// issuer (https://appleid.apple.com), audience (your bundle ID), and
+// expiry - e.g. with `apple-signin-auth` or `jsonwebtoken` + `jwks-rsa`.
 exports.appleLogin = async (req, res) => {
   try {
     const { identityToken, email, fullName } = req.body;

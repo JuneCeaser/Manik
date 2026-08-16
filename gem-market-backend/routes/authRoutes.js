@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const protect = require('../middleware/authMiddleware');
 const otpRateLimiter = require('../middleware/otpRateLimiter');
+const { userLoginRateLimiter } = require('../middleware/loginRateLimiter');
 const {
   sendRegisterOtp,
   verifyRegisterOtp,
@@ -24,7 +25,7 @@ const {
 // Public routes
 router.post('/register/send-otp', otpRateLimiter, sendRegisterOtp);
 router.post('/register/verify-otp', verifyRegisterOtp);
-router.post('/login', login);
+router.post('/login', userLoginRateLimiter, login);
 
 // Social Login routes
 router.post('/google', googleLogin);

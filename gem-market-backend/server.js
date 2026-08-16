@@ -17,8 +17,12 @@ connectDB();
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' })); 
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// SECURITY FIX: 50mb was far more than this app needs (the only JSON-body
+// payload with real size is the base64 profile photo in uploadProfileImage;
+// gem/certificate images go straight to ImageKit, not through this body
+// parser), so it was a needlessly large request-size DoS surface.
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Routes
 app.use('/api/auth', authRoutes);
